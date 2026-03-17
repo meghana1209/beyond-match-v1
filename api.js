@@ -24,6 +24,117 @@ const API_BASE = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
 import { callGemini } from "./gemini.js";
 
 /* =========================================================
+   THEMED TOAST NOTIFICATIONS
+   Replaces all native alert() calls. Types: success | error | info | warning
+========================================================= */
+(function injectToastStyles() {
+  if (document.getElementById("bm-toast-styles")) return;
+  const s = document.createElement("style");
+  s.id = "bm-toast-styles";
+  s.textContent = `
+    #bm-toast-container {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .bm-toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 280px;
+      max-width: 380px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: #0f1220;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: #e2e8f0;
+      pointer-events: all;
+      animation: bm-toast-in 0.28s cubic-bezier(.22,1,.36,1) both;
+    }
+    .bm-toast.bm-toast-out {
+      animation: bm-toast-out 0.22s ease forwards;
+    }
+    .bm-toast-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .bm-toast-body { flex: 1; }
+    .bm-toast-title {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .bm-toast-msg { color: #9bb3ff; font-size: 12.5px; }
+    .bm-toast-close {
+      background: none; border: none; cursor: pointer;
+      color: #4a5580; font-size: 16px; line-height: 1;
+      padding: 0; flex-shrink: 0; margin-top: -1px;
+      transition: color 0.15s;
+    }
+    .bm-toast-close:hover { color: #e2e8f0; }
+
+    /* variants */
+    .bm-toast.success { border-color: rgba(74,222,128,0.22); }
+    .bm-toast.success .bm-toast-title { color: #4ade80; }
+    .bm-toast.error   { border-color: rgba(248,113,113,0.22); }
+    .bm-toast.error   .bm-toast-title { color: #f87171; }
+    .bm-toast.warning { border-color: rgba(251,191,36,0.22); }
+    .bm-toast.warning .bm-toast-title { color: #fbbf24; }
+    .bm-toast.info    { border-color: rgba(122,162,255,0.22); }
+    .bm-toast.info    .bm-toast-title { color: #7aa2ff; }
+
+    @keyframes bm-toast-in  { from { opacity:0; transform:translateY(14px) scale(.97); } to { opacity:1; transform:none; } }
+    @keyframes bm-toast-out { from { opacity:1; transform:none; } to { opacity:0; transform:translateY(6px); } }
+  `;
+  document.head.appendChild(s);
+})();
+
+function showToast(message, type = "info", title = "") {
+  let container = document.getElementById("bm-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "bm-toast-container";
+    document.body.appendChild(container);
+  }
+
+  const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+  const titles = { success: title || "Success", error: title || "Error", warning: title || "Warning", info: title || "Info" };
+
+  const toast = document.createElement("div");
+  toast.className = `bm-toast ${type}`;
+  toast.innerHTML = `
+    <span class="bm-toast-icon">${icons[type] || icons.info}</span>
+    <div class="bm-toast-body">
+      <div class="bm-toast-title">${titles[type]}</div>
+      <div class="bm-toast-msg">${message}</div>
+    </div>
+    <button class="bm-toast-close" aria-label="Dismiss">&#x2715;</button>
+  `;
+
+  const dismiss = () => {
+    toast.classList.add("bm-toast-out");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  };
+
+  toast.querySelector(".bm-toast-close").addEventListener("click", dismiss);
+  container.appendChild(toast);
+  setTimeout(dismiss, type === "error" ? 6000 : 4000);
+}
+
+// Make globally available for auth.js and candidate.js
+window.showToast = showToast;
+
+/* =========================================================
    LLM ENRICHMENT — RECRUITER SIDE
    Generates recruiter summary + shortlist flags per candidate
 ========================================================= */
@@ -32,40 +143,63 @@ const llmCandidateCache = {};
 
 async function enrichCandidatesWithLLM(matches, cacheKey) {
 
-  // Return cached result if same job was already enriched
   if (cacheKey && llmCandidateCache[cacheKey]) {
-    console.log("LLM candidate cache hit:", cacheKey);
+    
     return llmCandidateCache[cacheKey];
   }
 
-  const slim = matches.map(m => ({
-    candidate_id: m.candidate_id,
-    name: m.name || "Unknown",
-    match_percent: m.match_percent,
-    confidence: m.confidence || "N/A",
-    top_reason: m.explanation?.top_reason || ""
+  const slim = matches.slice(0, 10).map(m => ({
+    id: m.candidate_id,
+    skills: (m.matched_skills || []).slice(0, 4),
+    pct: m.match_percent
   }));
 
-  const prompt = `You are a recruitment AI assistant.
-For each candidate below, write a 1-sentence recruiter note (max 20 words) on their suitability,
-and set shortlist_flag true for the top 2 you'd recommend interviewing first.
-
-IMPORTANT: Return ONLY a raw JSON array. No markdown, no backticks. Just the JSON.
-[{ "candidate_id": "...", "recruiter_summary": "...", "shortlist_flag": true/false }]
-
-Candidates:
-${JSON.stringify(slim, null, 2)}`;
+  const prompt = `Rank these candidates. Return ONLY a JSON array, no markdown.
+Each: {"candidate_id":"<id>","recruiter_summary":"1 sentence max 12 words","shortlist_flag":true/false}
+Top 2 get shortlist_flag true.
+${JSON.stringify(slim)}`;
 
   try {
-    const raw = await callGemini(prompt);
-    if (!raw) return matches.map(m => ({ candidate_id: m.candidate_id, recruiter_summary: null, shortlist_flag: false }));
-    const clean = raw.replace(/```json|```/g, "").trim();
+
+    const raw = await Promise.race([
+  callGemini(prompt),
+  new Promise(resolve => setTimeout(() => resolve(""), 25000))
+]);
+    if (!raw) {
+      return matches.map(m => ({
+        candidate_id: m.candidate_id,
+        recruiter_summary: null,
+        shortlist_flag: false
+      }));
+    }
+
+    let clean = raw.replace(/```json|```/g, "").trim();
+
+    // Repair truncated JSON: find last complete object and close the array
+    if (!clean.endsWith("]")) {
+      const lastComplete = clean.lastIndexOf("},");
+      const lastObj      = clean.lastIndexOf("}");
+      const cutAt        = lastComplete > -1 ? lastComplete + 1 : lastObj + 1;
+      clean = clean.slice(0, cutAt) + "]";
+    }
+
     const result = JSON.parse(clean);
-    if (cacheKey) llmCandidateCache[cacheKey] = result;
+
+    if (cacheKey) {
+      llmCandidateCache[cacheKey] = result;
+    }
+
     return result;
+
   } catch (err) {
-    console.warn("Recruiter LLM enrichment failed:", err);
-    return matches.map(m => ({ candidate_id: m.candidate_id, recruiter_summary: null, shortlist_flag: false }));
+
+    
+
+    return matches.map(m => ({
+      candidate_id: m.candidate_id,
+      recruiter_summary: null,
+      shortlist_flag: false
+    }));
   }
 }
 
@@ -109,7 +243,7 @@ async function apiFetch(path, options = {}) {
   });
 
   if (!res.ok) {
-    console.error("API error:", res.status, path);
+    
     return {};
   }
 
@@ -123,7 +257,7 @@ async function apiFetch(path, options = {}) {
     try {
       return JSON.parse(data.body);
     } catch (e) {
-      console.warn("Could not parse body:", e.message);
+      
       return data.body;
     }
   }
@@ -235,7 +369,7 @@ function selectJob(jobId, text) {
 
 async function loadMatches() {
   if (!selectedJobId) {
-    alert("Please select a job");
+    showToast("Please select a job first.", "warning");
     return;
   }
 
@@ -375,6 +509,7 @@ function setupCustomDropdown() {
 
 let recruiterOrg = null;
 let allJobs = [];
+let orgJobs = [];   // dedicated store, never overwritten by dashboard
 let showAll = false;
 
 async function initRecruiterJobsPage() {
@@ -414,6 +549,7 @@ document.getElementById("myOrgBtn")?.addEventListener("click", () => {
   showAll = false;
   document.getElementById("myOrgBtn").classList.add("active");
   document.getElementById("allJobsBtn").classList.remove("active");
+  populateLocationFilter();
   renderRecruiterJobs();
 });
 
@@ -421,6 +557,7 @@ document.getElementById("allJobsBtn")?.addEventListener("click", () => {
   showAll = true;
   document.getElementById("allJobsBtn").classList.add("active");
   document.getElementById("myOrgBtn").classList.remove("active");
+  populateLocationFilter();
   renderRecruiterJobs();
 });
 document.getElementById("locationFilter")
@@ -432,29 +569,42 @@ document.getElementById("locationFilter")
     ?.addEventListener("change", renderRecruiterJobs);
 }
 
-async function loadRecruiterJobs() {
-const jobs = await getStableJobs();
-
-// Store ALL jobs globally
-allJobs = jobs;
-
-// Filter org jobs for "My Organisation" tab
-const orgJobs = jobs.filter(j =>
-  j.company &&
-  recruiterOrg &&
-  j.company.toLowerCase().includes(
-  recruiterOrg.toLowerCase().trim()
-)
-);
-
-console.log("Total jobs:", jobs.length);
-console.log("Org jobs:", orgJobs.length);
-console.log("Organisation:", recruiterOrg);
-
-// Initially show org jobs if available, otherwise show all
-if (orgJobs.length > 0 && !showAll) {
-  allJobs = orgJobs;
+// Normalise a string for comparison: lowercase, collapse all whitespace/unicode
+function normaliseCompany(s) {
+  return (s || "").normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
 }
+
+// ─── ORG JOB FETCH ──────────────────────────────────────────────────────────
+// Calls /jobs?company= — Lambda does full internal scan and returns all matches.
+// Single call, cached per company for the session.
+const _jobsByCompanyCache = {};
+
+async function fetchOrgJobs(companyName) {
+  const cacheKey = normaliseCompany(companyName);
+  if (_jobsByCompanyCache[cacheKey]) {
+    
+    return _jobsByCompanyCache[cacheKey];
+  }
+
+  const res = await apiFetch(`/jobs?company=${encodeURIComponent(companyName)}`);
+  const jobs = res.jobs || [];
+
+  
+  _jobsByCompanyCache[cacheKey] = jobs;
+  return jobs;
+}
+
+async function loadRecruiterJobs() {
+  const tableEl = document.getElementById("jobsTable");
+  if (tableEl) tableEl.innerHTML = `<p style="color:#aaa;padding:16px">Loading jobs for your organisation…</p>`;
+
+  orgJobs = await fetchOrgJobs(recruiterOrg);
+
+  // For "All Jobs" toggle: single page of unfiltered jobs (browse sample)
+const allRes = await apiFetch(`/jobs`);
+allJobs = allRes.jobs || normalizeApiResponse(allRes);
+
+  
 
   renderRecruiterJobs();
   populateLocationFilter();
@@ -485,51 +635,48 @@ function renderRecruiterJobs() {
   // Show skeleton loaders while processing
   showJobsSkeletonLoader(tableEl, 5);
 
-// Get all jobs from API
-const allJobsFromAPI = cachedJobs || [];
+  let filtered = showAll ? [...allJobs] : [...orgJobs];
 
-// Filter based on showAll flag
-let filtered = showAll
-  ? allJobsFromAPI  // Show ALL jobs
-  : allJobsFromAPI.filter(j =>  // Show only org jobs
-      j.company &&
-      recruiterOrg &&
-    j.company.toLowerCase().includes(
-  recruiterOrg.toLowerCase().trim()
-)
+  
+  
+
+  /* SEARCH */
+  const searchTerm =
+    document.getElementById("searchInput")?.value.toLowerCase() || "";
+
+  if (searchTerm) {
+    filtered = filtered.filter(j =>
+      j.title?.toLowerCase().includes(searchTerm)
     );
+  }
 
-console.log("Showing:", showAll ? "ALL JOBS" : "ORG JOBS ONLY");
-console.log("Filtered count:", filtered.length);
+  /* LOCATION */
+  const location =
+    document.getElementById("locationFilter")?.value?.toLowerCase().trim();
 
-/* SEARCH */
-const searchTerm =
-  document.getElementById("searchInput")?.value.toLowerCase() || "";
+  if (location) {
+    filtered = filtered.filter(j =>
+      (getJobLocation(j) || "")
+        .toLowerCase()
+        .trim()
+        .includes(location)
+    );
+  }
 
-if (searchTerm) {
-  filtered = filtered.filter(j =>
-    j.title?.toLowerCase().includes(searchTerm)
-  );
-}
+  /* SORT */
+  const sortValue = document.getElementById("sortSelect")?.value;
 
-/* LOCATION */
-const location =
-  document.getElementById("locationFilter")?.value?.toLowerCase().trim();
-
-if (location) {
-  filtered = filtered.filter(j =>
-    (getJobLocation(j) || "")
-      .toLowerCase()
-      .trim()
-      .includes(location)
-  );
-}
-/* SORT */
-const sortValue = document.getElementById("sortSelect")?.value;
-
-if (sortValue === "title") {
-  filtered.sort((a, b) => a.title.localeCompare(b.title));
-}
+  if (sortValue === "newest") {
+    filtered.sort((a, b) =>
+      new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+  } else if (sortValue === "oldest") {
+    filtered.sort((a, b) =>
+      new Date(a.created_at || 0) - new Date(b.created_at || 0)
+    );
+  } else if (sortValue === "title") {
+    filtered.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  }
   if (!filtered.length) {
     tableEl.innerHTML = "<p>No jobs found.</p>";
     return;
@@ -572,7 +719,7 @@ tableEl.querySelectorAll("button[data-url]").forEach(btn => {
     const url = btn.getAttribute("data-url");
 
     if (!url) {
-      alert("No job link available");
+      showToast("No application link available for this job.", "warning");
       return;
     }
 
@@ -595,13 +742,8 @@ function populateLocationFilter() {
   const select = document.getElementById("locationFilter");
   if (!select) return;
 
-  const locations = [
-    ...new Set(
-      allJobs
-        .map(getJobLocation)
-        .filter(Boolean)
-    )
-  ];
+  const sourceJobs = showAll ? allJobs : orgJobs;
+  const locations = [...new Set(sourceJobs.map(getJobLocation).filter(Boolean))];
 
   select.innerHTML = `
     <option value="">All Locations</option>
@@ -649,34 +791,55 @@ async function initCandidateMatchesPage() {
       return;
     }
 
-    const jobs = await getStableJobs();
+    // Use fetchOrgJobs — single company-filtered call, cached for session
+    orgJobs = await fetchOrgJobs(recruiterOrg);
 
-    const orgJobs = jobs.filter(j =>
-    j.company &&
-j.company.toLowerCase().includes(
-  recruiterOrg.toLowerCase().trim()
-)
-    );
+    
 
-    recruiterOrgRoleList = [
-      ...new Set(orgJobs.map(j => j.title).filter(Boolean))
-    ];
-
-    if (!recruiterOrgRoleList.length) {
+    if (!orgJobs.length) {
       container.innerHTML = "No jobs found for your organisation.";
       return;
     }
 
-    roleDropdown.innerHTML = recruiterOrgRoleList
-      .map(role => `<option value="${role}">${role}</option>`)
+    // ── Fetch match counts for all jobs in parallel, then sort by most matches ──
+    roleDropdown.innerHTML = `<option value="">Sorting by matches…</option>`;
+
+    const matchCounts = await Promise.all(
+      orgJobs.map(async j => {
+        try {
+          const res = await apiFetch(`/matches?job_id=${j.job_id}&top_n=1&offset=0`);
+          const total = res.total_matches ?? (res.matches?.length ?? 0);
+          return { job_id: j.job_id, count: total };
+        } catch {
+          return { job_id: j.job_id, count: 0 };
+        }
+      })
+    );
+
+    // Build a quick lookup: job_id → match count
+    const countMap = {};
+    matchCounts.forEach(m => { countMap[m.job_id] = m.count; });
+
+    // Sort orgJobs by match count descending
+    const sortedJobs = [...orgJobs].sort(
+      (a, b) => (countMap[b.job_id] || 0) - (countMap[a.job_id] || 0)
+    );
+
+    // Populate dropdown — show count badge in label
+    roleDropdown.innerHTML = sortedJobs
+      .map(j => {
+        const loc   = j.city || j.location || "";
+        const count = countMap[j.job_id] || 0;
+        const label = `${j.title}${loc ? ` — ${loc}` : ""} (${count} match${count !== 1 ? "es" : ""})`;
+        return `<option value="${j.job_id}">${label}</option>`;
+      })
       .join("");
 
+    // Default-select the first job (most matches)
+    const defaultJobId = sortedJobs[0].job_id;
+    roleDropdown.value = defaultJobId;
 
-    const defaultRole = recruiterOrgRoleList[0];
-    roleDropdown.value = defaultRole;
-
-
-    await loadCandidatesForRole(defaultRole);
+    await loadCandidatesForRole(defaultJobId);
 
     roleDropdown.addEventListener("change", async () => {
    
@@ -697,31 +860,33 @@ document
 
 }
 
-async function loadCandidatesForRole(role) {
-
+async function loadCandidatesForRole(jobId) {
   const container = document.getElementById("candMatchesTable");
   if (!container) return;
 
   showCandidatesSkeletonLoader(container, 5);
 
-  const jobs = await getStableJobs();
-
- const selectedJob = jobs.find(j =>
-  j.title?.toLowerCase().trim() === role.toLowerCase().trim() &&
-  j.company?.toLowerCase().includes(
-    recruiterOrg.toLowerCase().trim()
-  )
-);
-
+  const selectedJob = orgJobs.find(j => j.job_id === jobId);  // exact match by ID
   if (!selectedJob) {
-    container.innerHTML = "No job found for this role.";
+    container.innerHTML = "No job found.";
     return;
   }
-selectedJobIdForCandidates = selectedJob.job_id;
-  const res = await apiFetch(
+
+  selectedJobIdForCandidates = selectedJob.job_id;
+  let res;
+
+try {
+  res = await apiFetch(
     `/matches?job_id=${selectedJob.job_id}&top_n=50&offset=0`
   );
-const data = normalizeApiResponse(res);
+} catch(e) {
+  
+  container.innerHTML = "Match service temporarily unavailable.";
+  return;
+}
+
+  // apiFetch already unwraps Lambda body → res is {matches:[...], total_matches:N}
+  const data = res.matches || normalizeApiResponse(res);
 
 if (!data.length) {
   container.innerHTML = "No matching candidates found.";
@@ -737,8 +902,9 @@ for (const match of data) {
 
   enriched.push({
     ...match,
-    name: candidateData.name || "",
-    email: candidateData.email || ""
+    name: candidateData.name || match.name || match.email || "",
+    email: candidateData.email || match.email || "",
+    resume_text: candidateData.resume_text || ""
   });
 }
 
@@ -791,6 +957,7 @@ async function renderCandidateMatches() {
     const percent = match.match_percent != null ? match.match_percent.toFixed(1) : "0";
 
     const skills =
+      match.matched_skills ||        // ✅ API returns this directly
       match.explanation?.skill_overlap ||
       match.explanation?.top_skills ||
       match.skills ||
@@ -805,39 +972,56 @@ async function renderCandidateMatches() {
 
     const llm = llmMap[match.candidate_id] || {};
 
-    return `
-      <div class="cand-card ${llm.shortlist_flag ? "ai-shortlist" : ""}">
+   return `
+<div class="cand-card ${llm.shortlist_flag ? "ai-shortlist" : ""}">
 
-        ${llm.shortlist_flag ? `<div class="ai-top-badge">⭐ AI Recommended</div>` : ""}
+  ${llm.shortlist_flag ? `<div class="ai-top-badge">⭐ AI Recommended</div>` : ""}
 
-        <div class="cand-title">${match.name || "Candidate"}</div>
-        <div class="cand-email">${match.email || "-"}</div>
+  <div class="cand-header">
+    <div class="cand-main">
+      <div class="cand-title">${(match.name && match.name !== match.email) ? match.name : (match.email?.split("@")[0] || "Candidate")}</div>
+      <div class="cand-email">${match.email || "-"}</div>
+    </div>
+    <div class="cand-score">
+      <span class="match-pill">${percent}%</span>
+    </div>
+  </div>
 
-        <div class="cand-skills">
-          ${
-            skills.length
-              ? skills.slice(0, 3).map(s => `<span class="skill-pill">${s}</span>`).join("")
-              : `<span class="skill-pill subtle">No skills available</span>`
-          }
-        </div>
+  ${(llm.inferred_level || match.level)
+    ? `<div class="cand-level"><span class="skill-pill subtle">${llm.inferred_level || match.level}</span></div>`
+    : ""}
 
-        <div class="cand-score">
-          <span class="match-pill">${percent}% Match</span>
-        </div>
+  <div class="cand-skills">
+    ${
+      llm.key_strengths && llm.key_strengths.length
+        ? llm.key_strengths.map(s => `<span class="skill-pill">${s}</span>`).join("")
+        : (match.matched_skills || []).slice(0,4).map(s => `<span class="skill-pill">${s}</span>`).join("")
+        || `<span class="skill-pill subtle">No skills listed</span>`
+    }
+  </div>
 
-        <div class="cand-confidence">${match.confidence || "N/A"}</div>
+  <div class="ai-insight">
+    ${llm.recruiter_summary
+      ? `✨ ${llm.recruiter_summary}`
+      : match.explanation?.top_reason
+        ? `✨ ${match.explanation.top_reason}`
+        : `<span style="opacity:0.4;font-style:italic">No summary available</span>`}
+  </div>
 
-        ${llm.recruiter_summary
-          ? `<div class="ai-insight">🤖 ${llm.recruiter_summary}</div>`
-          : ""}
+  <div class="cand-actions" style="display:flex;gap:8px;">
+    <a href="rec-actions.html?id=${match.candidate_id}&job=${selectedJobIdForCandidates}" class="view-btn" style="flex:1;text-align:center;">
+      View Profile →
+    </a>
+    <button
+      class="view-btn"
+      style="flex:1;background:rgba(122,162,255,0.08);border:1px solid rgba(122,162,255,0.2);cursor:pointer;"
+      onclick="openCandidateAnalysis('${match.candidate_id}', '${(match.name||'').replace(/'/g,'')}', '${selectedJobIdForCandidates}')">
+      🔍 Analyse
+    </button>
+  </div>
 
-        <div class="cand-actions">
-          <a href="rec-actions.html?id=${match.candidate_id}&job=${selectedJobIdForCandidates}"
-             class="view-btn">View</a>
-        </div>
-
-      </div>
-    `;
+</div>
+`;
   });
 
   container.innerHTML = cards.join("");
@@ -854,6 +1038,14 @@ async function initRecruiterActionsPage() {
   const container = document.getElementById("actionsContainer");
   if (!container) return;
 
+  // Wait for Firebase auth to resolve before touching Firestore
+  onAuthStateChanged(auth, async (user) => {
+
+    if (!user) {
+      container.innerHTML = "Not authenticated.";
+      return;
+    }
+
   const urlParams = new URLSearchParams(window.location.search);
   const candidateId = urlParams.get("id");
   const jobId = urlParams.get("job");
@@ -862,7 +1054,12 @@ async function initRecruiterActionsPage() {
   if (!candidateId) {
     showCandidatesSkeletonLoader(container, 4);
 
-    const q = query(collection(db, "recruiter_actions"));
+    const recruiter = user;
+
+const q = query(
+  collection(db, "recruiter_actions"),
+  where("recruiter_id", "==", recruiter.uid)
+);
     const snap = await getDocs(q);
 
     if (snap.empty) {
@@ -916,8 +1113,9 @@ async function initRecruiterActionsPage() {
   const snap = await getDoc(doc(db, "candidates", candidateId));
   const candidate = snap.exists() ? snap.data() : {};
 
-  container.innerHTML = `
-    <div class="profile-wrapper">
+  container.classList.remove("actions-grid");
+container.innerHTML = `
+  <div class="profile-wrapper">
 
       <div class="profile-left card">
 
@@ -981,11 +1179,12 @@ async function initRecruiterActionsPage() {
     </div>
   `;
 
-  // 🔥 Load existing status
+  // 🔥 Load existing status — scoped to this recruiter
   const q = query(
     collection(db, "recruiter_actions"),
     where("candidate_id", "==", candidateId),
-    where("job_id", "==", jobId)
+    where("job_id", "==", jobId),
+    where("recruiter_id", "==", user.uid)
   );
 
   const snapActions = await getDocs(q);
@@ -1002,13 +1201,14 @@ async function initRecruiterActionsPage() {
     const status = document.getElementById("statusSelect").value;
     const notes = document.getElementById("notesInput").value;
 
-    const q = query(
+    const saveQ = query(
       collection(db, "recruiter_actions"),
       where("candidate_id", "==", candidateId),
-      where("job_id", "==", jobId)
+      where("job_id", "==", jobId),
+      where("recruiter_id", "==", user.uid)
     );
 
-    const existing = await getDocs(q);
+    const existing = await getDocs(saveQ);
 
     if (!existing.empty) {
       const docRef = existing.docs[0].ref;
@@ -1024,6 +1224,7 @@ async function initRecruiterActionsPage() {
       await addDoc(collection(db, "recruiter_actions"), {
         candidate_id: candidateId,
         job_id: jobId,
+        recruiter_id: user.uid,
         status,
         notes,
         created_at: serverTimestamp()
@@ -1031,12 +1232,12 @@ async function initRecruiterActionsPage() {
 
     }
 
-    alert("Saved successfully ✅");
+    showToast("Action saved successfully.", "success");
   };
 
   document.getElementById("sendEmailBtn").onclick = () => {
     if (!candidate.email) {
-      alert("No email available.");
+      showToast("No email address on file for this candidate.", "warning");
       return;
     }
 
@@ -1060,7 +1261,7 @@ async function initRecruiterActionsPage() {
     // Return instantly if same candidate + status was already drafted
     const cacheKey = `${candidateId}:${status}`;
     if (emailDraftCache[cacheKey]) {
-      console.log("Email draft cache hit:", cacheKey);
+      
       output.value = emailDraftCache[cacheKey];
       box.style.display = "block";
       return;
@@ -1089,8 +1290,8 @@ Return ONLY the email body text, no subject line, no JSON.`;
       output.value = draft;
       box.style.display = "block";
     } catch (err) {
-      console.error("AI email draft failed:", err);
-      alert("AI draft failed. Please try again.");
+      
+      showToast("AI draft failed. Please try again.", "error");
     } finally {
       btn.disabled = false;
       btn.textContent = "✨ Draft with AI";
@@ -1099,10 +1300,194 @@ Return ONLY the email body text, no subject line, no JSON.`;
 
   document.getElementById("sendAiEmailBtn").onclick = () => {
     const draft = document.getElementById("aiEmailOutput").value;
-    if (!candidate.email) { alert("No email available."); return; }
+    if (!candidate.email) { showToast("No email address on file for this candidate.", "warning"); return; }
     const subject = encodeURIComponent("Regarding Your Application – BeyondMatch");
     window.location.href = `mailto:${candidate.email}?subject=${subject}&body=${encodeURIComponent(draft)}`;
   };
+
+  }); // end onAuthStateChanged
 }
 
 document.addEventListener("DOMContentLoaded", initRecruiterActionsPage);
+/* =========================================================
+   RECRUITER CANDIDATE ANALYSIS MODAL
+   Mirrors candidate-side "Know More" but reversed:
+   recruiter sees resume vs JD comparison
+========================================================= */
+const _recAnalysisCache = {};
+
+window.openCandidateAnalysis = async function(candidateId, candidateName, jobId) {
+
+  // ── Inject modal once ──
+  if (!document.getElementById("recAnalysisOverlay")) {
+    const overlay = document.createElement("div");
+    overlay.id = "recAnalysisOverlay";
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,0.78);
+      backdrop-filter:blur(6px);z-index:1000;
+      display:flex;align-items:center;justify-content:center;
+      padding:20px;box-sizing:border-box;
+    `;
+    overlay.innerHTML = `
+      <div id="recAnalysisModal" style="
+        background:#0f1220;border:1px solid rgba(122,162,255,0.15);
+        border-radius:16px;width:100%;max-width:700px;
+        max-height:88vh;overflow-y:auto;
+        padding:32px;box-sizing:border-box;
+        position:relative;color:#e2e8f0;font-family:inherit;
+      ">
+        <button id="recAnalysisClose" style="
+          position:absolute;top:16px;right:18px;
+          background:none;border:none;color:#6b7fa8;
+          font-size:22px;cursor:pointer;line-height:1;
+        ">&#x2715;</button>
+        <div id="recAnalysisContent"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.style.display = "none"; });
+    document.getElementById("recAnalysisClose").addEventListener("click", () => {
+      document.getElementById("recAnalysisOverlay").style.display = "none";
+    });
+  }
+
+  const overlay = document.getElementById("recAnalysisOverlay");
+  const content = document.getElementById("recAnalysisContent");
+  overlay.style.display = "flex";
+
+  // ── Spinner while loading ──
+  content.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Candidate Analysis</div>
+      <h2 style="margin:0;font-size:20px;color:#e2e8f0;">${candidateName || candidateId}</h2>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;color:#6b7280;font-size:14px;padding:24px 0;">
+      <div style="width:20px;height:20px;border-radius:50%;border:2px solid #7aa2ff;border-top-color:transparent;animation:recSpin 0.8s linear infinite;flex-shrink:0;"></div>
+      Comparing resume against job description…
+    </div>
+    <style>@keyframes recSpin{to{transform:rotate(360deg)}}</style>
+  `;
+
+  const cacheKey = `${candidateId}__${jobId}`;
+  if (_recAnalysisCache[cacheKey]) {
+    renderCandidateAnalysis(content, candidateName, _recAnalysisCache[cacheKey]);
+    return;
+  }
+
+  // ── Fetch resume + JD ──
+  let resumeText = "";
+  let jobData    = orgJobs.find(j => j.job_id === jobId) || {};
+
+  try {
+    const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const snap = await getDoc(doc(window.db, "candidates", candidateId));
+    if (snap.exists()) resumeText = (snap.data().resume_text || "").slice(0, 1200);
+  } catch(e) {}
+
+  const jdText = (jobData.description || jobData.jd || "").slice(0, 1000);
+
+  const prompt = `You are a recruiter assistant reviewing a candidate for a role.
+
+Job Title: ${jobData.title || "Unknown Role"}
+Job Description: ${jdText || "Not provided"}
+
+Candidate Resume:
+${resumeText || "Not provided"}
+
+Return ONLY a raw JSON object, no markdown, no backticks:
+{
+  "match_summary": "2-3 sentences: how well this candidate fits the role and why",
+  "strengths": ["specific strength from their resume relevant to this JD", "strength 2", "strength 3"],
+  "gaps": ["skill or experience missing vs JD", "gap 2"],
+  "interview_questions": [
+    {"q": "specific question to probe a strength or gap", "why": "what this reveals"},
+    {"q": "question 2", "why": "reason"},
+    {"q": "question 3", "why": "reason"}
+  ],
+  "hire_recommendation": "Strong Yes / Yes / Maybe / No — 1 sentence reason"
+}`;
+
+  try {
+    const { callGemini } = await import("./gemini.js");
+    const raw   = await callGemini(prompt);
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+    _recAnalysisCache[cacheKey] = parsed;
+    renderCandidateAnalysis(content, candidateName, parsed, jobData);
+  } catch(err) {
+    
+    content.innerHTML += `<p style="color:#f87171;font-size:13px;margin-top:16px;">Analysis failed. Please try again.</p>`;
+  }
+};
+
+function renderCandidateAnalysis(content, candidateName, data, jobData = {}) {
+
+  const strengthsHTML = (data.strengths || []).map(s => `
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">
+      <span style="color:#4ade80;font-size:14px;flex-shrink:0;">✓</span>
+      <span style="color:#d1d5db;font-size:13px;line-height:1.5;">${s}</span>
+    </div>`).join("");
+
+  const gapsHTML = (data.gaps || []).map(g => `
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">
+      <span style="color:#fbbf24;font-size:14px;flex-shrink:0;">△</span>
+      <span style="color:#d1d5db;font-size:13px;line-height:1.5;">${g}</span>
+    </div>`).join("");
+
+  const questionsHTML = (data.interview_questions || []).map((q, i) => `
+    <div style="padding:12px 14px;background:#0b0e16;border-radius:10px;border:1px solid rgba(122,162,255,0.1);margin-bottom:8px;">
+      <div style="font-weight:600;font-size:13px;color:#e2e8f0;margin-bottom:4px;">Q${i+1}. ${q.q}</div>
+      <div style="font-size:12px;color:#6b7fa8;font-style:italic;">→ ${q.why}</div>
+    </div>`).join("");
+
+  const recColor = (data.hire_recommendation || "").toLowerCase().startsWith("strong yes") ? "#4ade80"
+    : (data.hire_recommendation || "").toLowerCase().startsWith("yes") ? "#7aa2ff"
+    : (data.hire_recommendation || "").toLowerCase().startsWith("maybe") ? "#fbbf24"
+    : "#f87171";
+
+  content.innerHTML = `
+    <!-- Header -->
+    <div style="margin-bottom:22px;">
+      <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Candidate Analysis</div>
+      <h2 style="margin:0 0 4px;font-size:20px;color:#e2e8f0;">${candidateName}</h2>
+      ${jobData.title ? `<p style="margin:0;color:#6b7fa8;font-size:13px;">vs. ${jobData.title}</p>` : ""}
+    </div>
+
+    <div style="height:1px;background:rgba(122,162,255,0.1);margin-bottom:20px;"></div>
+
+    <!-- Match Summary -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Overall Fit</div>
+      <p style="color:#d1d5db;font-size:14px;line-height:1.6;margin:0;">${data.match_summary || ""}</p>
+    </div>
+
+    <!-- Strengths + Gaps side by side -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px;">
+      <div style="background:#0b0e16;border-radius:10px;padding:14px;border:1px solid rgba(74,222,128,0.12);">
+        <div style="font-size:11px;color:#4ade80;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">✓ Strengths</div>
+        ${strengthsHTML || '<p style="color:#6b7280;font-size:13px;">None identified</p>'}
+      </div>
+      <div style="background:#0b0e16;border-radius:10px;padding:14px;border:1px solid rgba(251,191,36,0.12);">
+        <div style="font-size:11px;color:#fbbf24;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">△ Gaps</div>
+        ${gapsHTML || '<p style="color:#6b7280;font-size:13px;">None identified</p>'}
+      </div>
+    </div>
+
+    <div style="height:1px;background:rgba(122,162,255,0.1);margin-bottom:20px;"></div>
+
+    <!-- Interview Questions -->
+    ${questionsHTML ? `
+    <div style="margin-bottom:22px;">
+      <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">💬 Suggested Interview Questions</div>
+      ${questionsHTML}
+    </div>` : ""}
+
+    <div style="height:1px;background:rgba(122,162,255,0.1);margin-bottom:20px;"></div>
+
+    <!-- Hire Recommendation -->
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#0b0e16;border-radius:10px;border:1px solid ${recColor}33;">
+      <div style="font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">Recommendation</div>
+      <div style="color:${recColor};font-size:14px;font-weight:600;">${data.hire_recommendation || "—"}</div>
+    </div>
+  `;
+}

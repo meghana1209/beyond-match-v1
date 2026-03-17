@@ -1,71 +1,285 @@
-const apiFetch = window.apiFetch;
-
 let map;
 let markersLayer;
 
-// INIT
-document.addEventListener("DOMContentLoaded", () => {
-  initMap();
-  loadJobsAndMarkers();
+const CACHE_KEY = "bm_geocode_cache_v1";
+
+function loadGeoCache() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch { return {}; }
+}
+function saveGeoCache(cache) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {}
+}
+
+async function nominatim(locationStr) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationStr)}&format=json&limit=1`;
+    const res  = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+    return data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
+  } catch { return null; }
+}
+
+/* ── Country name resolver ───────────────────────────────────────────────── */
+const COUNTRY_CODES = {
+  US:"United States", GB:"United Kingdom", AU:"Australia", IN:"India",
+  CA:"Canada", DE:"Germany", FR:"France", NL:"Netherlands", SG:"Singapore",
+  AE:"UAE", NZ:"New Zealand", IE:"Ireland", PK:"Pakistan", NG:"Nigeria",
+  ZA:"South Africa", KE:"Kenya", BR:"Brazil", MX:"Mexico", JP:"Japan",
+  CN:"China", KR:"South Korea", SE:"Sweden", NO:"Norway", DK:"Denmark",
+  FI:"Finland", CH:"Switzerland", ES:"Spain", IT:"Italy", PL:"Poland",
+  PT:"Portugal", PH:"Philippines", MY:"Malaysia", TH:"Thailand",
+};
+
+function resolveCountryLabel(jobs) {
+  // Try country code first
+  const countryCodes = jobs.map(j => (j.country || "").toUpperCase()).filter(Boolean);
+  const freq = {};
+  countryCodes.forEach(c => { freq[c] = (freq[c] || 0) + 1; });
+  const topCode = Object.entries(freq).sort((a,b) => b[1]-a[1])[0]?.[0];
+  if (topCode && COUNTRY_CODES[topCode]) return COUNTRY_CODES[topCode];
+  if (topCode && topCode.length === 2) return topCode;
+  // Fallback: try to strip state-like suffixes from location strings
+  const locs = jobs.map(j => j.location_display || j.location || "").filter(Boolean);
+  if (locs[0]) {
+    const parts = locs[0].split(",").map(s => s.trim());
+    return parts[parts.length - 1] || locs[0];
+  }
+  return "Unknown";
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────────── */
+let _tipEl = null;
+function getTip() {
+  if (_tipEl) return _tipEl;
+  _tipEl = document.createElement("div");
+  _tipEl.id = "bm-map-tip";
+  _tipEl.style.cssText = [
+    "position:fixed", "pointer-events:none", "z-index:9999",
+    "display:none", "opacity:0",
+    "transition:opacity 0.15s ease,transform 0.15s ease",
+    "transform:translateY(8px)",
+  ].join(";");
+  document.body.appendChild(_tipEl);
+  return _tipEl;
+}
+
+function _showTip(e, html) {
+  const tip = getTip();
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  requestAnimationFrame(() => {
+    tip.style.opacity = "1";
+    tip.style.transform = "translateY(0)";
+  });
+  _moveTip(e);
+}
+
+function _moveTip(e) {
+  const tip = getTip();
+  const W = tip.offsetWidth, H = tip.offsetHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x = e.clientX + 18, y = e.clientY - H / 2;
+  if (x + W > vw - 12) x = e.clientX - W - 14;
+  if (y < 8) y = 8;
+  if (y + H > vh - 8) y = vh - H - 8;
+  tip.style.left = x + "px";
+  tip.style.top  = y + "px";
+}
+
+function _hideTip() {
+  const tip = getTip();
+  tip.style.opacity = "0";
+  tip.style.transform = "translateY(8px)";
+  setTimeout(() => { if (tip.style.opacity === "0") tip.style.display = "none"; }, 180);
+}
+
+document.addEventListener("mousemove", e => {
+  if (_tipEl && _tipEl.style.display !== "none") _moveTip(e);
 });
 
-// MAP SETUP
+/* ── Build compact tooltip HTML ─────────────────────────────────────────── */
+function _buildTipHTML(jobs) {
+  const country = resolveCountryLabel(jobs);
+  const count   = jobs.length;
+
+  // Top roles by frequency
+  const roleFreq = {};
+  jobs.forEach(j => { if (j.title) roleFreq[j.title] = (roleFreq[j.title] || 0) + 1; });
+  const topRoles = Object.entries(roleFreq)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 3)
+    .map(([role, n]) => ({ role, n }));
+
+  // Avg salary
+  const withSal = jobs.filter(j => j.salary_min || j.salary_max);
+  const avgSal  = withSal.length
+    ? Math.round(withSal.reduce((s,j) => s + (j.salary_max || j.salary_min || 0), 0) / withSal.length)
+    : null;
+
+  const s = (v) => `style="${v}"`;  // shorthand
+
+  const rolesHTML = topRoles.map(({role, n}) => `
+    <div ${s("display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(122,162,255,0.05);border:1px solid rgba(122,162,255,0.1);border-radius:6px;")}>
+      <span ${s("font-size:11.5px;font-weight:600;color:#c8d8ff;")}>${role}</span>
+      <span ${s("font-size:10px;color:#7aa2ff;font-weight:700;margin-left:8px;")}>${n}</span>
+    </div>`).join("");
+
+  const salHTML = avgSal
+    ? `<div ${s("margin-top:8px;padding:4px 8px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:6px;display:flex;justify-content:space-between;align-items:center;")}>
+        <span ${s("font-size:10.5px;color:#6b7fa8;")}>Avg. salary</span>
+        <span ${s("font-size:11.5px;font-weight:700;color:#4ade80;")}>~$${avgSal.toLocaleString()}</span>
+       </div>`
+    : "";
+
+  return `
+    <div ${s([
+      "background:#0b0e1a",
+      "border:1px solid rgba(122,162,255,0.18)",
+      "border-radius:12px",
+      "padding:12px 14px",
+      "width:210px",
+      "box-shadow:0 16px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(122,162,255,0.05),inset 0 1px 0 rgba(122,162,255,0.08)",
+      "font-family:'DM Sans',sans-serif",
+      "backdrop-filter:blur(12px)",
+    ].join(";"))}>
+
+      <!-- header -->
+      <div ${s("display:flex;align-items:center;gap:7px;margin-bottom:10px;")}>
+        <div ${s("width:24px;height:24px;border-radius:7px;background:rgba(122,162,255,0.1);border:1px solid rgba(122,162,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;")}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="#7aa2ff"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        </div>
+        <div>
+          <div ${s("font-size:13px;font-weight:700;color:#e2e8f0;letter-spacing:-0.01em;")}>${country}</div>
+          <div ${s("font-size:10px;color:#7aa2ff;margin-top:1px;")}>${count} open position${count !== 1 ? "s" : ""}</div>
+        </div>
+      </div>
+
+      <!-- divider -->
+      <div ${s("height:1px;background:rgba(122,162,255,0.08);margin-bottom:8px;")}></div>
+
+      <!-- top roles -->
+      <div ${s("font-size:9.5px;font-weight:700;color:#4a5580;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;")}>Top Roles</div>
+      <div ${s("display:flex;flex-direction:column;gap:4px;")}>${rolesHTML}</div>
+
+      ${salHTML}
+
+      <!-- cta -->
+      <div ${s("margin-top:9px;text-align:right;font-size:10px;color:#3a4568;letter-spacing:0.03em;")}>Click to explore →</div>
+    </div>`;
+}
+
+/* ── Map init ────────────────────────────────────────────────────────────── */
 function initMap() {
   map = L.map("map").setView([20, 0], 2);
-
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap"
   }).addTo(map);
 
   markersLayer = L.markerClusterGroup({
     maxClusterRadius: 40,
-    iconCreateFunction: function (cluster) {
-      const count = cluster.getChildCount();
+    iconCreateFunction(cluster) {
+      // Sum _bmJobs across all child markers — same source as tooltip count
+      const totalJobs = cluster.getAllChildMarkers()
+        .reduce((sum, m) => sum + (m._bmJobs?.length || 1), 0);
       return L.divIcon({
-        html: `<div class="cluster-icon">${count}</div>`,
+        html: `<div class="cluster-icon">${totalJobs}</div>`,
         className: "",
         iconSize: L.point(36, 36)
       });
     }
-  }).addTo(map);
+  });
+
+  /* Cluster hover */
+  markersLayer.on("clustermouseover", e => {
+    const allJobs = e.layer.getAllChildMarkers().flatMap(m => m._bmJobs || []);
+    _showTip(e.originalEvent || window.event, _buildTipHTML(allJobs));
+  });
+  markersLayer.on("clustermousemove", e => _moveTip(e.originalEvent || window.event));
+  markersLayer.on("clustermouseout",  ()  => _hideTip());
+
+  markersLayer.addTo(map);
 }
 
-// LOAD JOBS + CREATE MARKERS
+/* ── Place markers helper ────────────────────────────────────────────────── */
+function _makeMarker(loc) {
+  const marker = L.marker([loc.lat, loc.lng]);
+  marker._bmJobs  = loc.jobs;
+  marker._bmTitle = loc.title;
+  marker.on("mouseover", e => _showTip(e.originalEvent || window.event, _buildTipHTML(loc.jobs)));
+  marker.on("mousemove", e => _moveTip(e.originalEvent || window.event));
+  marker.on("mouseout",  ()  => _hideTip());
+  marker.on("click", () => showJobsForLocation(loc.title, loc.jobs));
+  return marker;
+}
+
 async function loadJobsAndMarkers() {
-  const res = await apiFetch("/jobs");
-  const jobs = Array.isArray(res) ? res : JSON.parse(res.body || "[]");
+  let attempts = 0;
+  while (!window.apiFetch && attempts < 50) {
+    await new Promise(r => setTimeout(r, 100));
+    attempts++;
+  }
+  if (!window.apiFetch) return;
 
-  markersLayer.clearLayers();
+  const res = await window.apiFetch("/jobs");
+  let jobs = [];
+  if (Array.isArray(res))            jobs = res;
+  else if (Array.isArray(res?.jobs)) jobs = res.jobs;
+  else if (res?.body) {
+    try { const p = JSON.parse(res.body); jobs = Array.isArray(p) ? p : (p.jobs || []); } catch {}
+  }
+  if (!jobs.length) return;
 
-  // GROUP JOBS BY LAT+LNG
   const locationMap = {};
-
-  jobs.forEach(job => {
-    if (!job.lat || !job.lng) return;
-
-    const key = `${job.lat},${job.lng}`;
-    if (!locationMap[key]) {
-      locationMap[key] = {
-        lat: job.lat,
-        lng: job.lng,
-        title: job.city || job.location_display || "Jobs",
-        jobs: []
-      };
+  for (const job of jobs) {
+    if (job.lat && job.lng) {
+      const k = `${job.lat},${job.lng}`;
+      if (!locationMap[k]) locationMap[k] = { lat: +job.lat, lng: +job.lng, title: job.city || job.location_display || "Jobs", jobs: [] };
+      locationMap[k].jobs.push(job);
+      continue;
     }
-    locationMap[key].jobs.push(job);
-  });
+    const locStr = job.location_display || job.location ||
+      (job.city && job.country ? `${job.city}, ${job.country}` : job.city || job.country || null);
+    if (!locStr) continue;
+    const k = locStr.trim().toLowerCase();
+    if (!locationMap[k]) locationMap[k] = { locStr, title: locStr, jobs: [], needsGeocode: true };
+    locationMap[k].jobs.push(job);
+  }
 
-  // CREATE ONE MARKER PER LOCATION
-  Object.values(locationMap).forEach(loc => {
-    const marker = L.marker([loc.lat, loc.lng]).addTo(markersLayer);
+  const geoCache  = loadGeoCache();
+  const toFetch   = Object.values(locationMap).filter(loc => loc.needsGeocode);
+  const cacheHits = toFetch.filter(loc => geoCache[loc.locStr.toLowerCase()] !== undefined);
+  const cacheMiss = toFetch.filter(loc => geoCache[loc.locStr.toLowerCase()] === undefined);
 
-    marker.on("click", () => {
-      showJobsForLocation(loc.title, loc.jobs);
-    });
-  });
+  for (const loc of cacheHits) {
+    const coords = geoCache[loc.locStr.toLowerCase()];
+    if (coords) { loc.lat = coords.lat; loc.lng = coords.lng; }
+  }
+
+  // Render already-resolved markers
+  [
+    ...Object.values(locationMap).filter(l => !l.needsGeocode),
+    ...cacheHits.filter(l => l.lat && l.lng)
+  ].forEach(loc => _makeMarker(loc).addTo(markersLayer));
+
+  // Geocode unknowns progressively
+  let cacheUpdated = false;
+  for (let i = 0; i < cacheMiss.length; i++) {
+    const loc    = cacheMiss[i];
+    const key    = loc.locStr.toLowerCase();
+    const coords = await nominatim(loc.locStr);
+    geoCache[key] = coords;
+    cacheUpdated  = true;
+    if (coords) {
+      loc.lat = coords.lat;
+      loc.lng = coords.lng;
+      _makeMarker(loc).addTo(markersLayer);
+    }
+    if (i < cacheMiss.length - 1) await new Promise(r => setTimeout(r, 1100));
+  }
+  if (cacheUpdated) saveGeoCache(geoCache);
 }
 
-// RIGHT PANEL RENDER
+/* ── Right panel ─────────────────────────────────────────────────────────── */
 function showJobsForLocation(title, jobs) {
   const panel   = document.getElementById("cityPanel");
   const grid    = document.getElementById("panelGrid");
@@ -77,7 +291,6 @@ function showJobsForLocation(title, jobs) {
   if (count) count.textContent = `${jobs.length} job${jobs.length === 1 ? '' : 's'} available`;
 
   grid.innerHTML = "";
-
   if (!jobs.length) {
     grid.innerHTML = `
       <div class="panel-placeholder">
@@ -93,14 +306,12 @@ function showJobsForLocation(title, jobs) {
   }
 
   jobs.forEach((job, i) => {
-    const location = job.location_display || job.city || "Location not specified";
+    const location = job.location_display || job.location || job.city || "Location not specified";
     const hasApply = job.apply_url && job.apply_url !== '#';
-
     grid.innerHTML += `
       <div class="panel-job-card" style="animation-delay:${i * 45}ms">
         <div class="panel-job-title">${job.title || "Job Role"}</div>
         <div class="panel-job-company">${job.company || "Company not available"}</div>
-
         <div class="panel-job-meta">
           <span class="panel-job-loc">
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -110,7 +321,6 @@ function showJobsForLocation(title, jobs) {
           </span>
           ${job.source ? `<span class="panel-job-source">${job.source}</span>` : ''}
         </div>
-
         ${hasApply
           ? `<a class="panel-apply-btn" href="${job.apply_url}" target="_blank" rel="noopener noreferrer">
                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -119,17 +329,21 @@ function showJobsForLocation(title, jobs) {
                </svg>
                Apply Now
              </a>`
-          : ''
-        }
-      </div>
-    `;
+          : ''}
+      </div>`;
   });
 }
 
-// CLOSE PANEL
 window.closeCityPanel = function () {
-  const panel = document.getElementById("cityPanel");
-  const grid  = document.getElementById("panelGrid");
-  panel.classList.add("hidden");
-  grid.innerHTML = "";
+  document.getElementById("cityPanel")?.classList.add("hidden");
+  const grid = document.getElementById("panelGrid");
+  if (grid) grid.innerHTML = "";
 };
+
+// Boot
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => { initMap(); loadJobsAndMarkers(); });
+} else {
+  initMap();
+  loadJobsAndMarkers();
+}

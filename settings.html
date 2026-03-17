@@ -390,10 +390,11 @@ body {
   </div>
 </main>
 
+<script src="api.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, sendPasswordResetEmail, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCbrwCaaQYEFCF1FJto_O3OYi68qTOqGQc",
@@ -472,13 +473,61 @@ window.goBack = async () => {
   location.href = DASH[role] || "candidate-dashboard.html";
 };
 
-window.resetPassword = () =>
-  sendPasswordResetEmail(auth, auth.currentUser.email)
-    .then(() => alert("Password reset email sent ✅"))
-    .catch(e => alert(e.message));
+window.resetPassword = async () => {
+  try {
+    await sendPasswordResetEmail(auth, auth.currentUser.email);
+    showToast('Password reset email sent to ' + auth.currentUser.email, 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+};
 
-window.downloadData  = () => alert("Coming soon");
-window.deleteAccount = () => alert("Contact support to delete your account");
+window.downloadData = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const data = snap.exists() ? snap.data() : {};
+    const clean = JSON.parse(JSON.stringify(data, (key, val) =>
+      val?.toDate ? val.toDate().toISOString() : val
+    ));
+    const payload = { uid: user.uid, email: user.email, exportedAt: new Date().toISOString(), profile: clean };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'beyondmatch_my_data.json' });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Your data has been downloaded.', 'success');
+  } catch (e) {
+    showToast('Failed to export data: ' + e.message, 'error');
+  }
+};
+
+window.deleteAccount = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  const confirmed = confirm('Delete your account? This will permanently delete your account and all your data. This cannot be undone.');
+  if (!confirmed) return;
+  const password = prompt('Please enter your password to confirm:');
+  if (!password) return;
+  try {
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+    await deleteDoc(doc(db, 'users', user.uid));
+    await deleteUser(user);
+    showToast('Your account has been deleted.', 'success');
+    await new Promise(r => setTimeout(r, 1500));
+    window.location.href = 'index.html';
+  } catch (e) {
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      showToast('Incorrect password. Account not deleted.', 'error');
+    } else {
+      showToast('Failed to delete account: ' + e.message, 'error');
+    }
+  }
+};
 
 window.unifiedLogout = async () => {
   await auth.signOut();

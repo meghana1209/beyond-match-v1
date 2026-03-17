@@ -236,11 +236,11 @@ async function enrichMatchesWithLLM(matches, allJobs, cacheKey) {
     };
   });
 
-  const prompt = `You are a career advisor AI inside a recruitment platform.
+// AFTER:
+const prompt = `You are a career advisor AI inside a recruitment platform.
 Given these job matches for a candidate, do two things:
-1. Re-rank them from best to worst fit (consider match %, role clarity, salary, growth potential).
+1. Re-rank them from best to worst fit. match_percent is the PRIMARY ranking signal. A job with lower match_percent must ALWAYS rank below a job with higher match_percent, regardless of salary or other factors.
 2. For each job write a single friendly sentence (max 20 words) explaining WHY it suits the candidate. Start with "Great fit because" or "Strong match —" etc.
-
 IMPORTANT: Return ONLY a raw JSON array. No markdown, no backticks, no explanation. Just the JSON.
 Each item: { "index": <number>, "job_id": "...", "ai_rank": 1, "ai_insight": "..." }
 
@@ -344,17 +344,53 @@ async function resolveToBackendId(localId) {
    LOAD JOB MATCHES
    Fetches raw matches, enriches via Gemini, then renders
 ========================================================= */
+function _jobMatchSkeleton() {
+  return `
+    <div class="skeleton-card">
+      <div class="skel-row">
+        <div style="flex:1;">
+          <div class="skel skel-h20" style="width:160px;margin-bottom:6px;"></div>
+          <div class="skel skel-h14" style="width:100px;"></div>
+        </div>
+        <div class="skel skel-circle"></div>
+      </div>
+      <div class="skel-row" style="gap:6px;">
+        <div class="skel skel-h10" style="width:80px;border-radius:5px;"></div>
+        <div class="skel skel-h10" style="width:90px;border-radius:5px;"></div>
+      </div>
+      <div class="skel skel-h14" style="width:60%;"></div>
+      <div class="skel skel-h10" style="width:80%;"></div>
+      <div class="skel skel-h10" style="width:60%;"></div>
+      <div class="skel-row" style="gap:5px;margin-top:2px;">
+        <div class="skel skel-h10" style="width:50px;border-radius:5px;"></div>
+        <div class="skel skel-h10" style="width:60px;border-radius:5px;"></div>
+        <div class="skel skel-h10" style="width:44px;border-radius:5px;"></div>
+      </div>
+      <div class="skel-row" style="gap:8px;margin-top:4px;">
+        <div class="skel skel-h34" style="flex:1;"></div>
+        <div class="skel skel-h34" style="flex:1;"></div>
+        <div class="skel skel-h34" style="flex:1;"></div>
+      </div>
+    </div>`;
+}
+
+function _showJobMatchSkeletons(grid, count = 8) {
+  if (!grid) return;
+  grid.innerHTML = Array(count).fill(null).map(_jobMatchSkeleton).join('');
+}
+
 async function loadCandidateJobMatches() {
   const select = document.getElementById("candidateSelect");
-  const candidateId = select.value;
+  const candidateId = select?.value;
   const grid = document.getElementById("matchesGrid");
 
   if (!candidateId) {
-    alert("Please select a candidate");
+    if (window.showToast) showToast("Please select a resume first.", "warning");
     return;
   }
 
-  showCandidatesSkeletonLoader(grid, 3);
+  // Show skeleton immediately — before any async work
+  _showJobMatchSkeletons(grid, 8);
 
   /* Resolve local_ placeholder to real backend ID before calling /matches */
   const resolvedId = await resolveToBackendId(candidateId);
@@ -402,8 +438,6 @@ async function loadCandidateJobMatches() {
     `;
     return;
   }
-
-  showCandidatesSkeletonLoader(grid, 4);
 
   const jobsRes = await apiFetch("/jobs");
   let allJobs = Array.isArray(jobsRes)
@@ -546,7 +580,7 @@ async function loadCandidateJobMatches() {
   document.querySelectorAll(".apply-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const url = btn.getAttribute("data-url");
-      if (!url) { alert("Application link not available for this job."); return; }
+      if (!url) { if (window.showToast) showToast("No application link available for this job.", "warning"); return; }
       window.open(url, "_blank", "noopener,noreferrer");
     });
   });
@@ -641,7 +675,7 @@ async function saveJobToFirebase(job, candidateId) {
   /* ===== SAFE CHECK FIRST ===== */
   if (!job || !job.job_id) {
     console.error("Invalid job object:", job);
-    alert("Job data missing");
+    if (window.showToast) showToast("Job data is missing. Please try again.", "error");
     return;
   }
 
@@ -672,7 +706,7 @@ async function saveJobToFirebase(job, candidateId) {
     action: "shortlist"
   });
 
-  alert("Job saved successfully");
+  if (window.showToast) showToast("Job saved to your list.", "success");
 }
 
 /* =========================================================
@@ -700,7 +734,7 @@ async function trackInteraction({ job_id, candidate_id, action }) {
 function openApplyLink(url) {
 
   if (!url || url === "#" || url.trim() === "") {
-    alert("Application link not available for this job.");
+    if (window.showToast) showToast("No application link available for this job.", "warning");
     return;
   }
 
@@ -855,10 +889,12 @@ Return ONLY a raw JSON object, no markdown, no backticks:
 }`;
 
   try {
-    const { callGemini } = await import("./gemini.js");
-    const raw = await callGemini(prompt);
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
+    // AFTER:
+const { callGemini } = await import("./gemini.js");
+const raw = await callGemini(prompt);
+const clean = raw.replace(/```json|```/g, "").trim();
+const jsonStr = clean.match(/\{[\s\S]*\}/)?.[0] || clean;
+const parsed = JSON.parse(jsonStr);
     knowMoreCache[jobData.job_id] = parsed;
     renderKnowMoreResult(content, jobData, parsed);
   } catch (err) {

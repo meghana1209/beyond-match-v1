@@ -1,26 +1,578 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Login – BeyondMatch</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LocateHire – BeyondMatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="libs/MarkerCluster.css" />
+  <link rel="stylesheet" href="libs/MarkerCluster.Default.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="libs/leaflet.markercluster.js"></script>
+
+<style>
+:root {
+  --bg:          #0b0e16;
+  --card:        #131726;
+  --card-border: rgba(122,162,255,0.08);
+  --blue:        #7aa2ff;
+  --blue-dim:    rgba(122,162,255,0.10);
+  --blue-line:   rgba(122,162,255,0.22);
+  --green:       #4ade80;
+  --red:         #f87171;
+  --purple:      #c084fc;
+  --text-1:      #e2e8f0;
+  --text-2:      #9bb3ff;
+  --text-3:      #88add9;
+  --sidebar-w:   220px;
+  --radius-lg:   14px;
+  --radius-sm:   8px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+::-webkit-scrollbar              { width: 5px; }
+::-webkit-scrollbar-track        { background: var(--bg); }
+::-webkit-scrollbar-thumb        { background: #1e2540; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--blue); }
+
+body {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+}
+
+/* ── SIDEBAR ── */
+.cand-sidebar {
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: #0d1018;
+  border-right: 1px solid rgba(255,255,255,0.05);
+  padding: 28px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.cand-brand {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 36px;
+  letter-spacing: -0.02em;
+}
+
+.cand-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.cand-menu-item {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #a8b3d1;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.cand-menu-item:hover  { background: rgba(122,162,255,0.06); color: var(--text-1); }
+.cand-menu-item.active { background: rgba(122,162,255,0.1); border-color: rgba(122,162,255,0.25); color: var(--blue); }
+
+.logout-btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--red);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+  margin-top: 4px;
+}
+.logout-btn:hover { background: rgba(248,113,113,0.08); }
+
+/* ── PAGE SHELL ── */
+.page-shell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── PAGE TITLE BAR ── */
+.page-title-bar {
+  padding: 24px 28px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(122,162,255,0.06);
+}
+
+.page-title-bar h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-title-bar h1 svg { flex-shrink: 0; }
+
+.page-title-bar p {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+/* ── MAP + PANEL ROW ── */
+.map-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+/* ── MAP ── */
+#map {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Leaflet dark tiles tint */
+.leaflet-tile { filter: brightness(0.85) saturate(0.7); }
+.leaflet-container { background: #0d1018; }
+
+/* ── CITY PANEL ── */
+.city-panel {
+  width: 360px;
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.city-panel.hidden {
+  display: none;
+}
+
+/* ── PANEL HEADER ── */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(122,162,255,0.07);
+  flex-shrink: 0;
+}
+
+.panel-title-wrap { display: flex; flex-direction: column; gap: 2px; }
+
+.panel-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.panel-job-count {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.panel-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(122,162,255,0.06);
+  border: 1px solid rgba(122,162,255,0.1);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.panel-close:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.25); color: var(--red); }
+
+/* ── PANEL BODY ── */
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: rgba(122,162,255,0.15); border-radius: 4px; }
+
+/* ── PLACEHOLDER STATE ── */
+.panel-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px;
+  gap: 14px;
+}
+
+.placeholder-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--blue-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-icon svg { stroke: var(--blue); }
+
+.panel-placeholder h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.panel-placeholder p {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+/* ── JOB CARDS IN PANEL ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.panel-job-card {
+  background: #0d1018;
+  border: 1px solid rgba(122,162,255,0.07);
+  border-radius: 11px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s, transform 0.2s;
+  animation: fadeUp 0.25s ease both;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-job-card:last-child { margin-bottom: 0; }
+
+.panel-job-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(122,162,255,0.03), transparent 70%);
+  pointer-events: none;
+}
+
+.panel-job-card:hover {
+  border-color: rgba(122,162,255,0.2);
+  transform: translateY(-2px);
+}
+
+.panel-job-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.panel-job-company {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.panel-job-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.panel-job-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+
+.panel-job-source {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-left: auto;
+}
+
+.panel-apply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, rgba(122,162,255,0.18), rgba(122,162,255,0.08));
+  border: 1px solid rgba(122,162,255,0.28);
+  border-radius: var(--radius-sm);
+  color: var(--blue);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.panel-apply-btn:hover {
+  background: var(--blue);
+  color: #080c18;
+  border-color: var(--blue);
+}
+
+/* ── CLUSTER MARKERS ── */
+.cluster-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7aa2ff, #4f46e5);
+  border: 2px solid rgba(122,162,255,0.4);
+  box-shadow: 0 0 0 4px rgba(122,162,255,0.12), 0 4px 12px rgba(79,70,229,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* Override Leaflet popup to match theme */
+.leaflet-popup-content-wrapper {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  font-family: 'DM Sans', sans-serif;
+}
+/* ── MAP HOVER TOOLTIP ── */
+.bm-map-tooltip {
+  background: #0f1220;
+  border: 1px solid rgba(122,162,255,0.2);
+  border-radius: 13px;
+  padding: 14px 16px;
+  width: 240px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(122,162,255,0.06);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.bm-tip-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.bm-tip-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.25;
+}
+
+.bm-tip-count {
+  font-size: 11px;
+  color: #7aa2ff;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.bm-tip-divider {
+  height: 1px;
+  background: rgba(122,162,255,0.1);
+  margin: 9px 0;
+}
+
+.bm-tip-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+
+.bm-tip-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(122,162,255,0.1);
+  border: 1px solid rgba(122,162,255,0.2);
+  color: #9bb3ff;
+  border-radius: 5px;
+  padding: 2px 7px;
+  letter-spacing: 0.02em;
+}
+
+.bm-tip-jobs { display: flex; flex-direction: column; gap: 6px; }
+
+.bm-tip-job {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.bm-tip-job-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bm-tip-job-co {
+  font-size: 10.5px;
+  color: #6b7fa8;
+}
+
+.bm-tip-more {
+  font-size: 11px;
+  color: #4a5580;
+  text-align: center;
+  margin-top: 5px;
+}
+
+.bm-tip-salary {
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: #4ade80;
+  background: rgba(74,222,128,0.06);
+  border: 1px solid rgba(74,222,128,0.15);
+  border-radius: 6px;
+  padding: 4px 9px;
+  text-align: center;
+}
+
+.bm-tip-cta {
+  margin-top: 9px;
+  font-size: 11px;
+  color: #4a5580;
+  text-align: right;
+  letter-spacing: 0.02em;
+}
+</style>
 </head>
 
-<body class="login-bg">
+<body>
 
-    <div class="login-box card">
-        <h1>BeyondMatch</h1>
-        <p class="subtitle">Smart Matching. Stronger Hiring.</p>
+<!-- ════════ SIDEBAR ════════ -->
+<aside class="cand-sidebar">
+  <h2 class="cand-brand">BeyondMatch</h2>
+  <nav class="cand-menu">
+    <a href="candidate-dashboard.html" class="cand-menu-item">Dashboard</a>
+    <a href="resume.html"              class="cand-menu-item">Resume Analysis</a>
+    <a href="jobmatches.html"          class="cand-menu-item">Job Matches</a>
+    <a href="savedjobs.html"           class="cand-menu-item">Saved Jobs</a>
+    <a href="locatehire.html"          class="cand-menu-item active">LocateHire</a>
+    <a href="settings.html"            class="cand-menu-item">Settings</a>
+  </nav>
+  <button class="logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
+</aside>
 
-        <input class="search" placeholder="Email">
-        <input class="search" placeholder="Password" type="password">
+<!-- ════════ PAGE SHELL ════════ -->
+<div class="page-shell">
 
-        <button class="btn full" onclick="location.href='index.html'">
-            Login
+  <!-- TITLE BAR -->
+  <div class="page-title-bar">
+    <h1>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#7aa2ff" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+      </svg>
+      LocateHire
+    </h1>
+    <p>Explore job opportunities visually across the globe.</p>
+  </div>
+
+  <!-- MAP + PANEL -->
+  <div class="map-row">
+
+    <div id="map"></div>
+
+    <div id="cityPanel" class="city-panel hidden">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h3 id="panelTitle">Jobs</h3>
+          <div class="panel-job-count" id="panelCount"></div>
+        </div>
+        <button class="panel-close" onclick="closeCityPanel()" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
+      </div>
 
-        <p style="opacity:0.7; margin-top:10px;">Forgot password?</p>
+      <div class="panel-body" id="panelGrid">
+        <!-- placeholder shown by JS -->
+      </div>
     </div>
+
+  </div>
+</div>
+
+<!-- SCRIPTS -->
+<script type="module" src="auth.js"></script>
+<script type="module" src="api.js"></script>
+<script type="module" src="candidate.js"></script>
+<script type="module" src="locatehire.js"></script>
 
 </body>
 </html>

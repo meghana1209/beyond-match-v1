@@ -2,13 +2,475 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Candidate Matches – BeyondMatch</title>
-  <link rel="stylesheet" href="recruiter-matches.css" />
-  <link rel="stylesheet" href="skeleton-loader.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+
+  <style>
+/* ═══════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════ */
+:root {
+  --bg:          #0b0e16;
+  --surface:     #0f1220;
+  --card:        #131726;
+  --card-border: rgba(122,162,255,0.08);
+
+  --blue:        #7aa2ff;
+  --blue-dim:    rgba(122,162,255,0.12);
+  --blue-line:   rgba(122,162,255,0.2);
+
+  --green:       #4ade80;
+  --green-dim:   rgba(74,222,128,0.1);
+  --green-line:  rgba(74,222,128,0.2);
+
+  --red:         #f87171;
+  --amber:       #fbbf24;
+  --purple:      #c084fc;
+
+  --text-1:      #e2e8f0;
+  --text-2:      #9bb3ff;
+  --text-3:      #6b7fa8;
+  --text-muted:  #4a5580;
+
+  --sidebar-w:   220px;
+  --radius-lg:   14px;
+  --radius-md:   10px;
+  --radius-sm:   8px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+::-webkit-scrollbar              { width: 5px; }
+::-webkit-scrollbar-track        { background: var(--bg); }
+::-webkit-scrollbar-thumb        { background: #1e2540; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--blue); }
+
+html { scroll-behavior: smooth; }
+
+body {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: #0d1018;
+  border-right: 1px solid rgba(255,255,255,0.05);
+  padding: 28px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.brand {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 36px;
+  letter-spacing: -0.02em;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.menu-item {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #a8b3d1;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  cursor: pointer;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.menu-item:hover              { background: rgba(122,162,255,0.06); color: var(--text-1); }
+.menu-item.active             { background: rgba(122,162,255,0.1); border-color: rgba(122,162,255,0.25); color: var(--blue); }
+.logout-btn                   { color: var(--red) !important; margin-top: auto; display: flex; align-items: center; gap: 8px; }
+.logout-btn:hover             { background: rgba(248,113,113,0.08) !important; }
+
+/* ═══════════════════════════════════════════
+   MAIN
+═══════════════════════════════════════════ */
+.main {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 32px 36px 48px;
+}
+
+.page-title               { margin-bottom: 26px; }
+.page-title h1            { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-1); }
+.page-title p             { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+
+/* ═══════════════════════════════════════════
+   FILTER BAR
+═══════════════════════════════════════════ */
+.jobs-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.input {
+  background: #0d1018;
+  border: 1px solid rgba(122,162,255,0.14);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.input.small              { height: 38px; }
+.input:focus              { border-color: rgba(122,162,255,0.4); }
+
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234a5580' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-color: #0d1018;
+  padding-right: 30px;
+  min-width: 160px;
+}
+
+select.input option             { background: #111827; }
+input.input[type="text"]        { cursor: text; min-width: 200px; }
+input.input[type="text"]::placeholder { color: var(--text-muted); }
+
+/* ═══════════════════════════════════════════
+   OUTER WRAPPER
+═══════════════════════════════════════════ */
+.jobs-table-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+/* ═══════════════════════════════════════════
+   GRID — api.js writes into #candMatchesTable
+═══════════════════════════════════════════ */
+#candMatchesTable {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+/* ═══════════════════════════════════════════
+   CANDIDATE CARD  (api.js class: .cand-card)
+   — transformer rebuilds internals into this
+     structured layout
+═══════════════════════════════════════════ */
+.cand-card {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
+  animation: fadeUp 0.35s ease both;
+  /* Prevent raw api.js children showing before transform */
+  min-height: 180px;
+}
+
+.cand-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(122,162,255,0.04), transparent 55%);
+  pointer-events: none;
+}
+
+.cand-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(122,162,255,0.22);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+}
+
+/* AI shortlist */
+.cand-card.ai-shortlist {
+  border-color: rgba(251,191,36,0.25);
+  box-shadow: 0 0 0 1px rgba(251,191,36,0.1);
+}
+.cand-card.ai-shortlist::before {
+  background: radial-gradient(ellipse at top left, rgba(251,191,36,0.05), transparent 60%);
+}
+
+/* ── top row: info + ring ── */
+.cand-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+.cand-info { flex: 1; min-width: 0; }
+
+.ai-top-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: 5px;
+  padding: 2px 7px;
+  margin-bottom: 7px;
+}
+
+/* Name */
+.cand-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* Email */
+.cand-mail {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Match ring ── */
+.match-ring-wrap {
+  flex-shrink: 0;
+  position: relative;
+  width: 54px;
+  height: 54px;
+}
+
+.match-ring-wrap svg {
+  width: 54px;
+  height: 54px;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+  stroke: #1b2140;
+  stroke-width: 4.5;
+}
+
+.ring-fill {
+  fill: none;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.03em;
+}
+
+/* ── divider ── */
+.cand-sep {
+  height: 1px;
+  background: rgba(122,162,255,0.06);
+  margin: 0 0 13px;
+}
+
+/* ── Confidence row ── */
+.conf-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 11px;
+}
+
+.conf-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.conf-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+}
+
+.conf-chip.high   { background: var(--green-dim); color: var(--green);  border-color: var(--green-line); }
+.conf-chip.medium { background: rgba(251,191,36,.1); color: var(--amber); border-color: rgba(251,191,36,.2); }
+.conf-chip.low    { background: rgba(248,113,113,.08); color: var(--red);  border-color: rgba(248,113,113,.2); }
+.conf-chip.na     { background: rgba(255,255,255,.04); color: var(--text-3); border-color: rgba(255,255,255,.07); }
+
+/* ── Skills ── */
+.skills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 12px;
+  flex: 1;
+}
+
+.skill-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: var(--blue-dim);
+  color: var(--blue);
+  border: 1px solid var(--blue-line);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.skill-pill.subtle {
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.07);
+  color: var(--text-3);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+/* ── AI insight ── */
+.insight-box.muted {
+  color: var(--text-muted);
+  font-style: italic;
+  border-color: transparent;
+  background: transparent;
+}
+
+.insight-box {
+  font-size: 12px;
+  color: var(--text-2);
+  background: rgba(122,162,255,0.06);
+  border: 1px solid rgba(122,162,255,0.12);
+  border-radius: 7px;
+  padding: 8px 10px;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+/* ── Action ── */
+.card-actions { margin-top: auto; padding-top: 4px; }
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 36px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(122,162,255,0.28);
+  background: linear-gradient(135deg, rgba(122,162,255,0.14), rgba(122,162,255,0.07));
+  color: var(--blue);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.02em;
+}
+
+.view-btn:hover {
+  background: var(--blue);
+  color: #080c18;
+  border-color: var(--blue);
+  box-shadow: 0 4px 16px rgba(122,162,255,0.28);
+}
+
+.view-btn::after { content: ' ↗'; font-size: 13px; opacity: 0.7; }
+
+/* ═══════════════════════════════════════════
+   LOADING / EMPTY STATES
+═══════════════════════════════════════════ */
+.llm-loading, #candMatchesTable > p {
+  grid-column: 1 / -1;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--blue);
+  font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════
+   ANIMATIONS
+═══════════════════════════════════════════ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+#candMatchesTable .cand-card:nth-child(1)  { animation-delay: .04s }
+#candMatchesTable .cand-card:nth-child(2)  { animation-delay: .09s }
+#candMatchesTable .cand-card:nth-child(3)  { animation-delay: .14s }
+#candMatchesTable .cand-card:nth-child(4)  { animation-delay: .19s }
+#candMatchesTable .cand-card:nth-child(5)  { animation-delay: .24s }
+#candMatchesTable .cand-card:nth-child(6)  { animation-delay: .29s }
+#candMatchesTable .cand-card:nth-child(7)  { animation-delay: .34s }
+#candMatchesTable .cand-card:nth-child(8)  { animation-delay: .39s }
+#candMatchesTable .cand-card:nth-child(9)  { animation-delay: .44s }
+#candMatchesTable .cand-card:nth-child(10) { animation-delay: .49s }
+  </style>
 </head>
+
 <body>
 
+<!-- ================= SIDEBAR ================= -->
 <aside class="sidebar">
   <h2 class="brand">BeyondMatch</h2>
   <nav class="menu">
@@ -21,62 +483,201 @@
   </nav>
 </aside>
 
+<!-- ================= MAIN ================= -->
 <main class="main">
 
   <div class="page-title">
     <h1 id="candMatchesTitle">Candidate Matches</h1>
-    <p>Select a role to view matching candidates.</p>
+    <p>Select a role to view matching candidates</p>
   </div>
 
+  <!-- FILTER BAR -->
   <div class="jobs-filter-bar">
-    <select id="roleDropdown" class="input small">
-      <option value="">Select Role</option>
-    </select>
+    <select id="roleDropdown"   class="input small"><option value="">Select Role</option></select>
     <select id="candSortSelect" class="input small">
       <option value="newest">Newest</option>
       <option value="oldest">Oldest</option>
       <option value="name">Name A–Z</option>
     </select>
-    <input type="text" id="candSearchInput" class="input small" style="background-image:none;padding-right:12px;cursor:text;" placeholder="Search candidate…" />
+    <input type="text" id="candSearchInput" class="input small" placeholder="Search candidate..." />
   </div>
 
+  <!-- GRID WRAPPER -->
   <div class="jobs-table-card">
-    <div class="cand-container">
-      <div id="candMatchesTable" class="cand-grid"></div>
-    </div>
+    <div id="candMatchesTable"></div>
   </div>
 
 </main>
 
-<!-- Instant skeletons -->
+<!-- ═══════════════════════════════════════════
+     CARD TRANSFORMER
+     ─────────────────────────────────────────
+     api.js writes flat .cand-card elements like:
+       <div class="cand-card">
+         <div class="cand-title">…</div>
+         <div class="cand-email">…</div>
+         <div class="cand-skills">…</div>
+         <div class="cand-score"><span class="match-pill">77.8% Match</span></div>
+         <div class="cand-confidence">N/A</div>
+         <div class="cand-actions"><a href="…">View</a></div>
+       </div>
+
+     We wait for the FULL batch (debounce 120ms after last
+     mutation), then rebuild every untransformed card in one
+     synchronous pass so nothing leaks outside its card.
+═══════════════════════════════════════════ -->
 <script>
-(function() {
-  const grid = document.getElementById('candMatchesTable');
-  if (!grid) return;
-  function skel() {
-    return `
-      <div class="skeleton-candidate-card">
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div class="skeleton-title" style="width:55%;height:16px;"></div>
-          <div class="skeleton-subtitle" style="width:70%;height:12px;"></div>
-          <div style="display:flex;gap:5px;">
-            <div class="skeleton-chip"></div>
-            <div class="skeleton-chip" style="width:60px;"></div>
-            <div class="skeleton-chip" style="width:70px;"></div>
-          </div>
-          <div class="skeleton-subtitle" style="width:28%;height:13px;"></div>
-          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
-            <div class="skeleton-btn" style="width:90px;"></div>
-          </div>
-        </div>
-      </div>`;
+(function () {
+  /* ── helpers ── */
+  function ringColour(p) {
+    if (p >= 80) return "#4ade80";
+    if (p >= 65) return "#7aa2ff";
+    if (p >= 50) return "#fbbf24";
+    return "#f87171";
   }
-  grid.innerHTML = Array(6).fill(null).map(skel).join('');
+
+  function mkRing(pct) {
+    const R    = 20;
+    const CIRC = +(2 * Math.PI * R).toFixed(2);   // 125.66
+    const p    = Math.min(Math.max(+pct || 0, 0), 100);
+    const off  = +(CIRC * (1 - p / 100)).toFixed(2);
+    const col  = ringColour(p);
+    return { html: `
+      <div class="match-ring-wrap" data-off="${off}" data-circ="${CIRC}">
+        <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+          <circle class="ring-bg"   cx="22" cy="22" r="${R}"/>
+          <circle class="ring-fill" cx="22" cy="22" r="${R}"
+                  stroke="${col}"
+                  stroke-dasharray="${CIRC}"
+                  stroke-dashoffset="${CIRC}"/>
+        </svg>
+        <div class="ring-label">${Math.round(p)}%</div>
+      </div>` };
+  }
+
+  function animateRings(root) {
+    root.querySelectorAll(".match-ring-wrap:not([data-an])").forEach(w => {
+      w.dataset.an = "1";
+      const fill = w.querySelector(".ring-fill");
+      if (!fill) return;
+      const off = parseFloat(w.dataset.off);
+      requestAnimationFrame(() => setTimeout(() => { fill.style.strokeDashoffset = off; }, 60));
+    });
+  }
+
+  /* ── core transformer ──
+     A card is "complete" when it has BOTH .cand-score AND .cand-actions.
+     This is the signal that api.js finished writing the card's innerHTML. */
+  function transformAll(container) {
+    container.querySelectorAll(".cand-card:not([data-tf])").forEach(card => {
+      /* Guard: card must be fully written by api.js */
+      if (!card.querySelector(".cand-score") || !card.querySelector(".cand-actions")) return;
+
+      card.dataset.tf = "1";
+
+      /* ── Extract all data from api.js children ── */
+      const name    = (card.querySelector(".cand-title")?.textContent || "Candidate").trim();
+      const email   = (card.querySelector(".cand-email")?.textContent || "").trim();
+
+      /* Match percent: "77.8% Match" → 77.8 */
+      const matchTxt = card.querySelector(".match-pill")?.textContent || "0";
+      const pct      = parseFloat(matchTxt) || 0;
+
+      /* Skills: preserve the already-rendered skill-pill spans */
+      const skillsHTML = card.querySelector(".cand-skills")?.innerHTML || "";
+
+      /* View link href */
+      const href = card.querySelector(".cand-actions a")?.getAttribute("href") || "#";
+
+      /* Analyse button onclick */
+      const analyseOnclick = card.querySelector(".cand-actions button")?.getAttribute("onclick") || "";
+
+      /* AI badge (added by LLM enrichment path) */
+      const hasBadge   = !!card.querySelector(".ai-top-badge");
+      const isShortlist = card.classList.contains("ai-shortlist");
+
+      /* AI insight (may have been injected by enrichment) */
+      const insightTxt = (card.querySelector(".ai-insight")?.textContent || "").trim()
+                          .replace(/^[✨🤖➤\s]+/, "");
+
+      /* ── Build ring ── */
+      const ring = mkRing(pct);
+
+      /* ── Rebuild card HTML ── */
+      card.innerHTML = `
+
+        <!-- row 1: info + ring -->
+        <div class="cand-card-top">
+          <div class="cand-info">
+            ${hasBadge ? `<div class="ai-top-badge">⭐ AI RECOMMENDED</div>` : ""}
+            <div class="cand-name">${name}</div>
+            <div class="cand-mail">${email}</div>
+          </div>
+          ${ring.html}
+        </div>
+
+        <!-- separator -->
+        <div class="cand-sep"></div>
+
+        <!-- skills -->
+        <div class="skills-row">${skillsHTML}</div>
+
+        <!-- AI insight as explanation -->
+        ${insightTxt
+          ? `<div class="insight-box">✨ ${insightTxt}</div>`
+          : `<div class="insight-box muted">Analysing candidate…</div>`}
+
+        <!-- actions -->
+        <div class="card-actions" style="display:flex;gap:8px;">
+          <a href="${href}" class="view-btn" style="flex:1;text-align:center;">View Profile</a>
+          ${analyseOnclick
+            ? `<button class="view-btn" style="flex:1;background:rgba(122,162,255,0.08);border:1px solid rgba(122,162,255,0.2);cursor:pointer;" onclick="${analyseOnclick.replace(/"/g,'&quot;')}">🔍 Analyse</button>`
+            : ""}
+        </div>
+      `;
+
+      if (isShortlist) card.classList.add("ai-shortlist");
+    });
+
+    animateRings(container);
+  }
+
+  /* ── Debounced MutationObserver ──
+     api.js sets container.innerHTML = cards.join("") in one shot.
+     The browser fires many mutation records for this. We debounce
+     120 ms so we run transformAll only once the full write is done. */
+  function watch(container) {
+    let timer = null;
+
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(() => transformAll(container), 120);
+    }
+
+    new MutationObserver(schedule).observe(container, { childList: true, subtree: true });
+
+    /* Run once immediately in case cards are already there */
+    transformAll(container);
+  }
+
+  /* ── Bootstrap ── */
+  function boot() {
+    const el = document.getElementById("candMatchesTable");
+    if (el) { watch(el); return; }
+    const poll = setInterval(() => {
+      const e = document.getElementById("candMatchesTable");
+      if (e) { clearInterval(poll); watch(e); }
+    }, 80);
+  }
+
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", boot)
+    : boot();
 })();
 </script>
 
-<script src="skeleton-loader.js"></script>
 <script type="module" src="auth.js"></script>
 <script type="module" src="api.js"></script>
+
 </body>
 </html>

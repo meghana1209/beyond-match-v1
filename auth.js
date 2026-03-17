@@ -16,7 +16,8 @@ import {
   serverTimestamp,
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 
@@ -60,7 +61,6 @@ onAuthStateChanged(auth, async (user) => {
   if (path.endsWith("index.html") || path === "/") {
     /* Wait for signup writes to finish before redirecting */
     if (_signupInProgress) {
-      console.log("Signup in progress, delaying redirect...");
       await new Promise(resolve => {
         const check = setInterval(() => {
           if (!_signupInProgress) { clearInterval(check); resolve(); }
@@ -95,11 +95,17 @@ onAuthStateChanged(auth, async (user) => {
           latest_candidate_id: fallbackId
         }, { merge: true });
       } catch (e) {
-        console.error("Safety net write failed:", e.code, e.message);
       }
     }
 
     if (role === "recruiter") {
+      /* ── Backfill: write recruiter_id if missing (existing accounts) ── */
+      if (!userData.recruiter_id) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), { recruiter_id: user.uid });
+        } catch (e) {
+        }
+      }
       window.location.href = "/rec-dash.html";
     } else if (role === "admin") {
       window.location.href = "/admin.html";
@@ -118,8 +124,7 @@ window.unifiedLogout = async function () {
     await signOut(auth);
     window.location.replace("index.html");
   } catch (err) {
-    console.error("Logout failed:", err);
-    alert("Failed to logout. Please try again.");
+    if (window.showToast) showToast("Logout failed. Please try again.", "error"); else alert("Logout failed.");
   }
 };
 
@@ -303,7 +308,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 } catch (err) {
 
-  console.error("Resume parse error:", err);
   resumeStatus.textContent = "Failed to parse resume.";
   btn.disabled = false;
 
@@ -380,11 +384,12 @@ if (role === "candidate") {
         /* Pre-compute fallback candidateId so it's always available */
         const fallbackCandidateId = role === "candidate" ? `local_${cred.user.uid}` : null;
 
-        /* Save user profile — include candidate_id immediately for candidates */
+        /* Save user profile — include candidate_id for candidates, recruiter_id for recruiters */
         await setDoc(doc(db, "users", cred.user.uid), {
           email,
           role,
           organisation_name:   role === "recruiter" ? orgName : null,
+          recruiter_id:        role === "recruiter" ? cred.user.uid : null,
           candidate_id:        fallbackCandidateId,
           latest_candidate_id: fallbackCandidateId,
           createdAt: serverTimestamp()
@@ -415,7 +420,6 @@ if (role === "candidate") {
               clearTimeout(timeoutId);
 
               const raw  = await res.text();
-              console.log("Backend /candidates raw response:", raw);
 
               let data = {};
               try { data = JSON.parse(raw); } catch(e) {}
@@ -425,13 +429,10 @@ if (role === "candidate") {
                     ? (() => { try { return JSON.parse(data.body)?.candidate_id; } catch(e) { return null; } })()
                     : null);
 
-              console.log("Parsed candidateId:", candidateId);
 
             } catch (err) {
               if (err.name === "AbortError") {
-                console.warn("Backend /candidates timed out after 5s — falling back to local ID");
               } else {
-                console.warn("Backend /candidates call failed:", err);
               }
             }
           }
@@ -443,7 +444,6 @@ if (role === "candidate") {
 
           /* ── 3. Write candidate doc ── */
           _signupInProgress = true;
-          console.log("💾 STEP 3: Writing candidates doc. ID:", candidateId, "| resume_text length:", (_signupResumeText||"").length);
           try {
             await setDoc(doc(db, "candidates", candidateId), {
               candidate_id: candidateId,
@@ -455,9 +455,7 @@ if (role === "candidate") {
               is_latest:    true,
               createdAt:    serverTimestamp()
             });
-            console.log("✅ Candidate doc saved! ID:", candidateId, "| resume_text chars:", (_signupResumeText||"").length);
           } catch (candErr) {
-            console.error("❌ Candidates doc write FAILED — code:", candErr.code, "| message:", candErr.message);
           }
 
           /* ── 4. ALWAYS write candidate_id to users doc (separate try so it never gets skipped) ── */
@@ -470,7 +468,6 @@ if (role === "candidate") {
               latest_candidate_id: candidateId,
               createdAt:           serverTimestamp()
             }, { merge: true });
-            console.log("Users doc updated with candidate_id:", candidateId);
             _signupInProgress = false;
 
             logEvent(analytics, "candidate_created", {
@@ -481,7 +478,6 @@ if (role === "candidate") {
 
           } catch (firestoreErr) {
             _signupInProgress = false;
-            console.error("Firestore write failed:", firestoreErr);
             showMessage("Account created but profile save failed. Please re-login.", "error");
           }
         }

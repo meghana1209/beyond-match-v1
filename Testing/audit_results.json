@@ -1,0 +1,1086 @@
+{
+  "summary": {
+    "totalFiles": 13,
+    "totalElements": 91,
+    "totalPass": 89,
+    "totalWarn": 2,
+    "totalFail": 0,
+    "fileResults": [
+      {
+        "file": "index.html",
+        "total": 6,
+        "pass": [
+          {
+            "line": 17,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "nav-btn",
+            "type": "submit",
+            "onclick": "openAuth(",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → openAuth() ✓"
+          },
+          {
+            "line": 18,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "nav-btn outline",
+            "type": "submit",
+            "onclick": "openAuth(",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → openAuth() ✓"
+          },
+          {
+            "line": 152,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "bm-card-btn",
+            "type": "submit",
+            "onclick": "openAuth(",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → openAuth() ✓"
+          },
+          {
+            "line": 165,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "bm-card-btn",
+            "type": "submit",
+            "onclick": "openAuth(",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → openAuth() ✓"
+          },
+          {
+            "line": 202,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "auth-btn",
+            "type": "submit",
+            "onclick": null,
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "type=submit inside form"
+          },
+          {
+            "line": 205,
+            "element": "ANCHOR",
+            "id": "authToggleLink",
+            "class": "",
+            "href": "(none)",
+            "onclick": "toggleAuth()",
+            "status": "PASS",
+            "note": "onclick handler present"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "admin.html",
+        "total": 3,
+        "pass": [
+          {
+            "line": 23,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "menu-item logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 20,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item active",
+            "href": "admin.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → admin.html ✓"
+          },
+          {
+            "line": 21,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "cand-matches.html",
+        "total": 9,
+        "pass": [
+          {
+            "line": 482,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "menu-item logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 477,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-dash.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-dash.html ✓"
+          },
+          {
+            "line": 478,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-jobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-jobs.html ✓"
+          },
+          {
+            "line": 479,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item active",
+            "href": "cand-matches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → cand-matches.html ✓"
+          },
+          {
+            "line": 480,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-actions.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-actions.html ✓"
+          },
+          {
+            "line": 481,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          },
+          {
+            "line": 522,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "",
+            "href": "…",
+            "onclick": null,
+            "status": "PASS",
+            "note": "href=\"…\""
+          },
+          {
+            "line": 632,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "view-btn",
+            "href": "${href}",
+            "onclick": null,
+            "status": "PASS",
+            "note": "href=\"${href}\""
+          }
+        ],
+        "warn": [
+          {
+            "line": 634,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "view-btn",
+            "type": "submit",
+            "onclick": "${analyseOnclick.replace(/",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "WARN",
+            "note": "onclick expression: \"${analyseOnclick.replace(/\" — verify manually"
+          }
+        ],
+        "fail": []
+      },
+      {
+        "file": "candidate-dashboard.html",
+        "total": 7,
+        "pass": [
+          {
+            "line": 179,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 172,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → candidate-dashboard.html ✓"
+          },
+          {
+            "line": 173,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → resume.html ✓"
+          },
+          {
+            "line": 174,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → jobmatches.html ✓"
+          },
+          {
+            "line": 175,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → savedjobs.html ✓"
+          },
+          {
+            "line": 176,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → locatehire.html ✓"
+          },
+          {
+            "line": 177,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "jobmatches.html",
+        "total": 8,
+        "pass": [
+          {
+            "line": 714,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 731,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "btn-primary",
+            "type": "submit",
+            "onclick": "loadCandidateJobMatches()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → loadCandidateJobMatches() ✓"
+          },
+          {
+            "line": 707,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → candidate-dashboard.html ✓"
+          },
+          {
+            "line": 708,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → resume.html ✓"
+          },
+          {
+            "line": 709,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → jobmatches.html ✓"
+          },
+          {
+            "line": 710,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → savedjobs.html ✓"
+          },
+          {
+            "line": 711,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → locatehire.html ✓"
+          },
+          {
+            "line": 712,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "locatehire.html",
+        "total": 8,
+        "pass": [
+          {
+            "line": 418,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 446,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "panel-close",
+            "type": "submit",
+            "onclick": "closeCityPanel()",
+            "ariaLabel": "Close",
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → closeCityPanel() ✓"
+          },
+          {
+            "line": 411,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → candidate-dashboard.html ✓"
+          },
+          {
+            "line": 412,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → resume.html ✓"
+          },
+          {
+            "line": 413,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → jobmatches.html ✓"
+          },
+          {
+            "line": 414,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → savedjobs.html ✓"
+          },
+          {
+            "line": 415,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → locatehire.html ✓"
+          },
+          {
+            "line": 416,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "login.html",
+        "total": 8,
+        "pass": [
+          {
+            "line": 528,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 556,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "panel-close",
+            "type": "submit",
+            "onclick": "closeCityPanel()",
+            "ariaLabel": "Close",
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → closeCityPanel() ✓"
+          },
+          {
+            "line": 521,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → candidate-dashboard.html ✓"
+          },
+          {
+            "line": 522,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → resume.html ✓"
+          },
+          {
+            "line": 523,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → jobmatches.html ✓"
+          },
+          {
+            "line": 524,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → savedjobs.html ✓"
+          },
+          {
+            "line": 525,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → locatehire.html ✓"
+          },
+          {
+            "line": 526,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "rec-actions.html",
+        "total": 6,
+        "pass": [
+          {
+            "line": 20,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "menu-item logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 15,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-dash.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-dash.html ✓"
+          },
+          {
+            "line": 16,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-jobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-jobs.html ✓"
+          },
+          {
+            "line": 17,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "cand-matches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → cand-matches.html ✓"
+          },
+          {
+            "line": 18,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item active",
+            "href": "rec-actions.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-actions.html ✓"
+          },
+          {
+            "line": 19,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "rec-dash.html",
+        "total": 6,
+        "pass": [
+          {
+            "line": 19,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "menu-item logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 14,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item active",
+            "href": "rec-dash.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-dash.html ✓"
+          },
+          {
+            "line": 15,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-jobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-jobs.html ✓"
+          },
+          {
+            "line": 16,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "cand-matches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → cand-matches.html ✓"
+          },
+          {
+            "line": 17,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-actions.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-actions.html ✓"
+          },
+          {
+            "line": 18,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "rec-jobs.html",
+        "total": 8,
+        "pass": [
+          {
+            "line": 20,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "menu-item logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 34,
+            "element": "BUTTON",
+            "id": "myOrgBtn",
+            "class": "toggle-pill active",
+            "type": "submit",
+            "onclick": null,
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "type=submit inside form"
+          },
+          {
+            "line": 35,
+            "element": "BUTTON",
+            "id": "allJobsBtn",
+            "class": "toggle-pill secondary",
+            "type": "submit",
+            "onclick": null,
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "type=submit inside form"
+          },
+          {
+            "line": 15,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-dash.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-dash.html ✓"
+          },
+          {
+            "line": 16,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item active",
+            "href": "rec-jobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-jobs.html ✓"
+          },
+          {
+            "line": 17,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "cand-matches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → cand-matches.html ✓"
+          },
+          {
+            "line": 18,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "rec-actions.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → rec-actions.html ✓"
+          },
+          {
+            "line": 19,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "resume.html",
+        "total": 9,
+        "pass": [
+          {
+            "line": 266,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 318,
+            "element": "BUTTON",
+            "id": "removeFile",
+            "class": "file-remove",
+            "type": "submit",
+            "onclick": null,
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "type=submit inside form"
+          },
+          {
+            "line": 260,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "/candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /candidate-dashboard.html ✓"
+          },
+          {
+            "line": 261,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "/resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /resume.html ✓"
+          },
+          {
+            "line": 262,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "/jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /jobmatches.html ✓"
+          },
+          {
+            "line": 263,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "/locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /locatehire.html ✓"
+          },
+          {
+            "line": 264,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "/settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /settings.html ✓"
+          },
+          {
+            "line": 265,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "/savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → /savedjobs.html ✓"
+          }
+        ],
+        "warn": [
+          {
+            "line": 326,
+            "element": "BUTTON",
+            "id": "analyzeBtn",
+            "class": "analyze-btn",
+            "type": "submit",
+            "onclick": null,
+            "ariaLabel": null,
+            "disabled": true,
+            "status": "DISABLED",
+            "note": "Button is disabled — intentional?"
+          }
+        ],
+        "fail": []
+      },
+      {
+        "file": "savedjobs.html",
+        "total": 7,
+        "pass": [
+          {
+            "line": 451,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 444,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "candidate-dashboard.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → candidate-dashboard.html ✓"
+          },
+          {
+            "line": 445,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "resume.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → resume.html ✓"
+          },
+          {
+            "line": 446,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "jobmatches.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → jobmatches.html ✓"
+          },
+          {
+            "line": 447,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item active",
+            "href": "savedjobs.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → savedjobs.html ✓"
+          },
+          {
+            "line": 448,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "locatehire.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → locatehire.html ✓"
+          },
+          {
+            "line": 449,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "cand-menu-item",
+            "href": "settings.html",
+            "onclick": null,
+            "status": "PASS",
+            "note": "Internal link → settings.html ✓"
+          }
+        ],
+        "warn": [],
+        "fail": []
+      },
+      {
+        "file": "settings.html",
+        "total": 6,
+        "pass": [
+          {
+            "line": 305,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "logout-btn",
+            "type": "submit",
+            "onclick": "unifiedLogout()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → unifiedLogout() ✓"
+          },
+          {
+            "line": 311,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "back-btn",
+            "type": "submit",
+            "onclick": "goBack()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → goBack() ✓"
+          },
+          {
+            "line": 355,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "action-btn",
+            "type": "submit",
+            "onclick": "resetPassword()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → resetPassword() ✓"
+          },
+          {
+            "line": 363,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "action-btn",
+            "type": "submit",
+            "onclick": "downloadData()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → downloadData() ✓"
+          },
+          {
+            "line": 382,
+            "element": "BUTTON",
+            "id": "(no id)",
+            "class": "danger-btn",
+            "type": "submit",
+            "onclick": "deleteAccount()",
+            "ariaLabel": null,
+            "disabled": false,
+            "status": "PASS",
+            "note": "onclick → deleteAccount() ✓"
+          },
+          {
+            "line": 438,
+            "element": "ANCHOR",
+            "id": "(no id)",
+            "class": "menu-item${l.href ===",
+            "href": "${l.href}",
+            "onclick": null,
+            "status": "PASS",
+            "note": "href=\"${l.href}\""
+          }
+        ],
+        "warn": [],
+        "fail": []
+      }
+    ]
+  },
+  "definedFunctionsCount": 135
+}

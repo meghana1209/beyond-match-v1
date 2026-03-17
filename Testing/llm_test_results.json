@@ -1,0 +1,460 @@
+{
+  "results": [
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "4001ms"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] Response not empty",
+      "status": "PASS",
+      "details": {
+        "note": "395 chars"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] Valid JSON returned",
+      "status": "PASS",
+      "details": {
+        "note": "4 items"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] All job_ids returned",
+      "status": "PASS",
+      "details": {
+        "note": "All IDs accounted for"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] ai_rank fields valid",
+      "status": "PASS",
+      "details": {
+        "note": "All ranks are positive numbers"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] ai_insight quality",
+      "status": "PASS",
+      "details": {
+        "note": "4/4 items have meaningful insights"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] Ranking logic sensible",
+      "status": "PASS",
+      "details": {
+        "note": "Highest match (Senior React Developer) ranked #1"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Priya Sharma — Senior Frontend Developer] Low relevance job ranked last",
+      "status": "PASS",
+      "details": {
+        "note": "DevOps Engineer correctly ranked last"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "1696ms"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] Response not empty",
+      "status": "PASS",
+      "details": {
+        "note": "391 chars"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] Valid JSON returned",
+      "status": "PASS",
+      "details": {
+        "note": "4 items"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] All job_ids returned",
+      "status": "PASS",
+      "details": {
+        "note": "All IDs accounted for"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] ai_rank fields valid",
+      "status": "PASS",
+      "details": {
+        "note": "All ranks are positive numbers"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] ai_insight quality",
+      "status": "PASS",
+      "details": {
+        "note": "4/4 items have meaningful insights"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] Ranking logic sensible",
+      "status": "PASS",
+      "details": {
+        "note": "Highest match (Senior Data Scientist) ranked #1"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[James Okafor — Data Scientist] Low relevance job ranked last",
+      "status": "PASS",
+      "details": {
+        "note": "Software Engineer (Backend) correctly ranked last"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "1820ms"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] Response not empty",
+      "status": "PASS",
+      "details": {
+        "note": "302 chars"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] Valid JSON returned",
+      "status": "PASS",
+      "details": {
+        "note": "3 items"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] All job_ids returned",
+      "status": "PASS",
+      "details": {
+        "note": "All IDs accounted for"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] ai_rank fields valid",
+      "status": "PASS",
+      "details": {
+        "note": "All ranks are positive numbers"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] ai_insight quality",
+      "status": "PASS",
+      "details": {
+        "note": "3/3 items have meaningful insights"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] Ranking logic sensible",
+      "status": "PASS",
+      "details": {
+        "note": "Highest match (Marketing Coordinator) ranked #1"
+      }
+    },
+    {
+      "useCase": "Job Match",
+      "testName": "[Sofia Martinez — Junior Marketing Graduate] Low relevance job ranked last",
+      "status": "PASS",
+      "details": {
+        "note": "Sales Development Rep correctly ranked last"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Senior React Developer] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "4225ms"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Senior React Developer] Valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "5 candidates ranked"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Senior React Developer] Exactly 2 shortlisted",
+      "status": "PASS",
+      "details": {
+        "note": "2 candidates marked shortlist_flag:true (expected 2)"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Senior React Developer] Best candidates shortlisted",
+      "status": "PASS",
+      "details": {
+        "note": "Correctly shortlisted top matches"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Senior React Developer] Summaries concise (≤14 words)",
+      "status": "PASS",
+      "details": {
+        "note": "5/5 summaries within word limit"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Data Scientist — NLP Focus] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "1535ms"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Data Scientist — NLP Focus] Valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "4 candidates ranked"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Data Scientist — NLP Focus] Exactly 2 shortlisted",
+      "status": "PASS",
+      "details": {
+        "note": "2 candidates marked shortlist_flag:true (expected 2)"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Data Scientist — NLP Focus] Best candidates shortlisted",
+      "status": "PASS",
+      "details": {
+        "note": "Correctly shortlisted top matches"
+      }
+    },
+    {
+      "useCase": "Recruiter",
+      "testName": "[Data Scientist — NLP Focus] Summaries concise (≤14 words)",
+      "status": "PASS",
+      "details": {
+        "note": "4/4 summaries within word limit"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "5606ms"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] Valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "Parsed successfully"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] summary field present",
+      "status": "PASS",
+      "details": {
+        "note": "37 words"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] what_youll_do bullets",
+      "status": "PASS",
+      "details": {
+        "note": "3 bullets"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] tips array valid",
+      "status": "PASS",
+      "details": {
+        "note": "3 tips with title+detail"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Senior React Dev + relevant resume] Tips personalised to resume",
+      "status": "PASS",
+      "details": {
+        "note": "Tips reference resume content"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "6332ms"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] Valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "Parsed successfully"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] summary field present",
+      "status": "PASS",
+      "details": {
+        "note": "47 words"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] what_youll_do bullets",
+      "status": "PASS",
+      "details": {
+        "note": "3 bullets"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] tips array valid",
+      "status": "PASS",
+      "details": {
+        "note": "3 tips with title+detail"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Data Scientist role + mismatched resume] Tips personalised to resume",
+      "status": "PASS",
+      "details": {
+        "note": "Tips reference resume content"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Generic role with no resume] API responded",
+      "status": "PASS",
+      "details": {
+        "note": "4362ms"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Generic role with no resume] Valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "Parsed successfully"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Generic role with no resume] summary field present",
+      "status": "PASS",
+      "details": {
+        "note": "51 words"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Generic role with no resume] what_youll_do bullets",
+      "status": "PASS",
+      "details": {
+        "note": "3 bullets"
+      }
+    },
+    {
+      "useCase": "Know More",
+      "testName": "[Generic role with no resume] tips array valid",
+      "status": "PASS",
+      "details": {
+        "note": "3 tips with title+detail"
+      }
+    },
+    {
+      "useCase": "Edge Cases",
+      "testName": "Single job — valid JSON",
+      "status": "PASS",
+      "details": {
+        "note": "2975ms, 1 items"
+      }
+    },
+    {
+      "useCase": "Edge Cases",
+      "testName": "Single job — ai_rank is 1",
+      "status": "PASS",
+      "details": {
+        "note": "ai_rank = 1"
+      }
+    },
+    {
+      "useCase": "Edge Cases",
+      "testName": "No markdown backticks in response",
+      "status": "PASS",
+      "details": {
+        "note": "Clean JSON, no backticks"
+      }
+    },
+    {
+      "useCase": "Edge Cases",
+      "testName": "No markdown headers in response",
+      "status": "PASS",
+      "details": {
+        "note": "No markdown headers"
+      }
+    },
+    {
+      "useCase": "Edge Cases",
+      "testName": "Latency acceptable (<15s)",
+      "status": "PASS",
+      "details": {
+        "note": "Avg: 1494ms over 2 calls"
+      }
+    }
+  ],
+  "summary": {
+    "total": 56,
+    "pass": 56,
+    "warn": 0,
+    "fail": 0,
+    "score": 100
+  },
+  "testedAt": "2026-03-17T04:52:32.234Z"
+}
