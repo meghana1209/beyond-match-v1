@@ -1134,3 +1134,8 @@ body {
     padding: 70px 30px;
   }
 }
+
+*:focus-visible {
+  outline: 2px solid #2E75B6;
+  outline-offset: 2px;
+}

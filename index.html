@@ -174,8 +174,10 @@
 <div class="auth-card" id="authCard">
   <h2 id="authTitle">Login</h2>
   <p id="authMessage" class="auth-message"></p>
-  <input type="email" placeholder="Email" />
-  <input type="password" placeholder="Password" />
+  <label for="authEmail" style="font-size:0.8rem;color:#94a3b8;display:block;margin-bottom:4px;">Email</label>
+  <input id="authEmail" type="email" placeholder="Email" />
+  <label for="authPassword" style="font-size:0.8rem;color:#94a3b8;display:block;margin-bottom:4px;margin-top:8px;">Password</label>
+  <input id="authPassword" type="password" placeholder="Password" />
 
   <select id="roleSelect" style="display:none;">
     <option value="">Select Role</option>
@@ -206,14 +208,16 @@
   </p>
 </div>
 
-<!-- PDF.js + Mammoth (needed for resume parsing during signup) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
-<script>
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-  }
+<!-- PDF.js + Mammoth (loaded with defer — only needed when resume upload is triggered) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+  });
 </script>
 
 <script type="module" src="auth.js"></script>

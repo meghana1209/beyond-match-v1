@@ -210,14 +210,28 @@ import { callGemini, isGeminiAvailable } from "./gemini.js";
    Reranks matches and adds a "why this fits you" insight
 ========================================================= */
 // Cache: candidate_id → enriched LLM results array
-const llmMatchCache = {};
+// Uses sessionStorage so results survive page re-renders within the same tab
+const llmMatchCache = {
+  _key: (k) => `llmCache_${k}`,
+  get(k) {
+    if (!k) return null;
+    try {
+      const raw = sessionStorage.getItem(this._key(k));
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  },
+  set(k, v) {
+    if (!k) return;
+    try { sessionStorage.setItem(this._key(k), JSON.stringify(v)); } catch { /* storage full — silent */ }
+  }
+};
 
 async function enrichMatchesWithLLM(matches, allJobs, cacheKey) {
 
   // Return cached result if same candidate was already enriched
-  if (cacheKey && llmMatchCache[cacheKey]) {
+  if (cacheKey && llmMatchCache.get(cacheKey)) {
     console.log("LLM match cache hit:", cacheKey);
-    return llmMatchCache[cacheKey];
+    return llmMatchCache.get(cacheKey);
   }
 
   const slim = matches.map((m, i) => {
@@ -263,7 +277,7 @@ ${JSON.stringify(slim, null, 2)}`;
       return { job_id: m.job_id, ai_rank: r.ai_rank ?? (i + 1), ai_insight: r.ai_insight || null };
     });
 
-    if (cacheKey) llmMatchCache[cacheKey] = result;
+    if (cacheKey) llmMatchCache.set(cacheKey, result);
     return result;
 
   } catch (err) {

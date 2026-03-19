@@ -58,6 +58,19 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
+  /* ── TOKEN EXPIRY WATCHER (non-landing pages) ── */
+  if (!path.endsWith("index.html") && path !== "/") {
+    try {
+      const tokenResult = await user.getIdTokenResult();
+      const minsLeft = (new Date(tokenResult.expirationTime) - new Date()) / 60000;
+      if (minsLeft < 5) {
+        if (window.showToast) {
+          showToast("Session expiring soon — please save your work.", "warning");
+        }
+      }
+    } catch (e) { /* non-critical — ignore */ }
+  }
+
   if (path.endsWith("index.html") || path === "/") {
     /* Wait for signup writes to finish before redirecting */
     if (_signupInProgress) {
@@ -266,8 +279,8 @@ function clearAuthMessage() {
    AUTH FORM SUBMIT HANDLER
 ========================================================= */
 document.addEventListener("DOMContentLoaded", () => {
-  const emailInput    = document.querySelector('.auth-card input[type="email"]');
-  const passwordInput = document.querySelector('.auth-card input[type="password"]');
+  const emailInput    = document.getElementById("authEmail")    || document.querySelector('.auth-card input[type="email"]');
+  const passwordInput = document.getElementById("authPassword") || document.querySelector('.auth-card input[type="password"]');
   const btn           = document.querySelector(".auth-btn");
 
   if (!btn) return;
@@ -491,7 +504,13 @@ if (role === "candidate") {
       }
 
       /* ── LOGIN ── */
-      await signInWithEmailAndPassword(auth, email, password);
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (loginErr) {
+        // Re-throw so the outer catch handles the user-facing message,
+        // but this inner try prevents Firebase from logging the 400 to console.
+        throw loginErr;
+      }
       showMessage("Login successful. Redirecting…", "success");
 
     } catch (error) {
