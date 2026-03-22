@@ -188,6 +188,20 @@
 
   <input type="text" id="orgNameInput" placeholder="Organisation Name" style="display:none;" />
 
+  <!-- ADMIN AUTH KEY — shown only for admin signup -->
+  <div id="adminKeyWrap" style="display:none; margin-top:10px;">
+    <label style="font-size:0.8rem;color:#94a3b8;display:block;margin-bottom:6px;">
+      Authorization Key
+    </label>
+    <input type="password" id="adminKeyInput" placeholder="Enter your authorization key"
+      style="width:100%;font-size:0.9rem;color:#e2e8f0;background:rgba(167,139,250,0.06);
+        border:1px solid rgba(167,139,250,0.2);border-radius:8px;
+        padding:10px 12px;outline:none;font-family:inherit;" />
+    <p style="font-size:0.75rem;color:#64748b;margin-top:5px;line-height:1.4;">
+      Admin access requires a key issued by your system administrator.
+    </p>
+  </div>
+
   <!-- RESUME UPLOAD — shown only for candidate signup -->
   <div id="resumeUploadWrap" style="display:none; margin-top: 10px;">
     <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:6px;">

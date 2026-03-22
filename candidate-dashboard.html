@@ -6,198 +6,1032 @@
   <title>Dashboard – BeyondMatch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
 <style>
 :root {
   --bg:          #0b0e16;
   --card:        #131726;
-  --card-border: rgba(122,162,255,0.08);
+  --card-hi:     #161d30;
+  --border:      rgba(122,162,255,0.08);
+  --border-hi:   rgba(122,162,255,0.18);
   --blue:        #7aa2ff;
   --blue-dim:    rgba(122,162,255,0.10);
   --green:       #4ade80;
+  --green-dim:   rgba(74,222,128,0.10);
+  --amber:       #fbbf24;
+  --amber-dim:   rgba(251,191,36,0.10);
   --red:         #f87171;
+  --purple:      #a78bfa;
+  --purple-dim:  rgba(167,139,250,0.10);
   --text-1:      #e2e8f0;
-  --text-3:      #88add9;
+  --text-2:      #b0bcd8;
+  --text-3:      #6b7fa8;
   --sidebar-w:   220px;
-  --radius-lg:   14px;
-  --radius-sm:   8px;
+  --r-lg: 14px; --r-md: 10px; --r-sm: 8px;
 }
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:#1e2540; border-radius:10px; }
+::-webkit-scrollbar-thumb:hover { background:var(--blue); }
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-::-webkit-scrollbar              { width: 5px; }
-::-webkit-scrollbar-track        { background: var(--bg); }
-::-webkit-scrollbar-thumb        { background: #1e2540; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover  { background: var(--blue); }
-
-body {
-  display: flex;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text-1);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  overflow: hidden;
-}
+body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1);
+  font-family:'DM Sans',sans-serif; font-size:14px; overflow:hidden; }
 
 /* ── SIDEBAR ── */
-.cand-sidebar {
-  width: var(--sidebar-w);
-  min-height: 100vh;
-  background: #0d1018;
-  border-right: 1px solid rgba(255,255,255,0.05);
-  padding: 28px 16px 24px;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.cand-brand {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--blue);
-  margin-bottom: 36px;
-  letter-spacing: -0.02em;
-}
-
-.cand-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.cand-menu-item {
-  display: block;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: #a8b3d1;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-  border: 1px solid transparent;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
-}
-
-.cand-menu-item:hover {
-  background: rgba(122,162,255,0.06);
-  color: var(--text-1);
-}
-
-.cand-menu-item.active {
-  background: rgba(122,162,255,0.1);
-  border-color: rgba(122,162,255,0.25);
-  color: var(--blue);
-}
-
-.logout-btn {
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--red);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.2s;
-  margin-top: 4px;
-}
-
-.logout-btn:hover { background: rgba(248,113,113,0.08); }
+.sidebar { width:var(--sidebar-w); min-height:100vh; background:#0d1018;
+  border-right:1px solid rgba(255,255,255,0.05); padding:28px 16px 24px;
+  display:flex; flex-direction:column; flex-shrink:0; }
+.brand { font-size:1.45rem; font-weight:700; color:var(--blue); margin-bottom:36px;
+  letter-spacing:-0.02em; text-decoration:none; display:block; }
+.nav { display:flex; flex-direction:column; gap:4px; flex:1; }
+.nav-link { display:block; font-size:13.5px; font-weight:500; color:#a8b3d1;
+  padding:10px 14px; border-radius:var(--r-sm); text-decoration:none;
+  border:1px solid transparent; transition:background .2s,color .2s,border-color .2s; }
+.nav-link:hover { background:rgba(122,162,255,0.06); color:var(--text-1); }
+.nav-link.active { background:var(--blue-dim); border-color:rgba(122,162,255,0.25); color:var(--blue); }
+.logout-btn { width:100%; text-align:left; background:transparent; border:none;
+  font-family:inherit; font-size:13.5px; font-weight:500; color:var(--red);
+  padding:10px 14px; border-radius:var(--r-sm); cursor:pointer; display:flex;
+  align-items:center; gap:8px; transition:background .2s; margin-top:4px; }
+.logout-btn:hover { background:rgba(248,113,113,0.08); }
 
 /* ── MAIN ── */
-.cand-main {
-  flex: 1;
-  min-width: 0;
-  height: 100vh;
-  overflow-y: auto;
-  padding: 32px 32px 48px;
-  display: flex;
-  flex-direction: column;
-}
+.main { flex:1; min-width:0; height:100vh; overflow-y:auto;
+  padding:24px 24px 48px; display:flex; flex-direction:column; gap:16px; }
 
-/* ── PAGE TITLE ── */
-.cand-page-title { margin-bottom: 24px; }
-.cand-page-title h1 {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.cand-page-title p { font-size: 13px; color: var(--text-3); margin-top: 5px; }
+/* ── HEADER ── */
+.header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.header h1 { font-size:20px; font-weight:700; letter-spacing:-0.02em; }
+.header p { font-size:12px; color:var(--text-3); margin-top:3px; }
 
-/* ── POWER BI CARD ── */
-.powerbi-card {
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-lg);
-  padding: 20px 22px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
+/* ── CANDIDATE PILL ── */
+.cand-pill { display:flex; align-items:center; gap:10px; background:var(--card);
+  border:1px solid var(--border); padding:8px 14px; border-radius:30px;
+  transition:border-color .2s; }
+.cand-pill:hover { border-color:var(--border-hi); }
+.avatar { width:32px; height:32px; border-radius:50%;
+  background:linear-gradient(135deg,#5b7fff,var(--purple));
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; color:#fff; flex-shrink:0; letter-spacing:.5px; }
+.pill-name { font-size:13px; font-weight:600; color:var(--text-1); }
+.pill-role { font-size:11px; color:var(--blue); font-weight:500; }
+.pill-id   { font-size:9.5px; color:var(--text-3); font-family:monospace; opacity:.7; margin-top:1px; }
 
-.powerbi-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: #9bb3ff;
-}
+/* ── KPI STRIP ── */
+.kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+.kpi-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg);
+  padding:14px 16px; display:flex; flex-direction:column; gap:4px;
+  position:relative; overflow:hidden; transition:border-color .2s,transform .18s; }
+.kpi-card:hover { border-color:var(--border-hi); transform:translateY(-1px); }
+.kpi-icon { position:absolute; right:12px; top:12px; font-size:16px; opacity:.18; }
+.kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-3); }
+.kpi-value { font-size:26px; font-weight:700; letter-spacing:-0.03em; line-height:1.1; }
+.kpi-sub { font-size:11px; color:var(--text-3); }
+.kpi-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:10px;
+  font-size:10.5px; font-weight:700; margin-top:3px; width:fit-content; }
+.kpi-badge.green  { background:var(--green-dim);  color:var(--green); }
+.kpi-badge.blue   { background:var(--blue-dim);   color:var(--blue); }
+.kpi-badge.amber  { background:var(--amber-dim);  color:var(--amber); }
+.kpi-badge.purple { background:var(--purple-dim); color:var(--purple); }
 
-.powerbi-card iframe {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  border: none;
-  border-radius: 10px;
-  background: #0d1018;
-}
+/* ── SHIMMER ── */
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.shim { background:linear-gradient(90deg,#1a2035 25%,#212942 50%,#1a2035 75%);
+  background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:6px; }
+
+/* ── CHART GRIDS ── */
+.g3 { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:12px; }
+.g2 { display:grid; grid-template-columns:1fr 1.7fr; gap:12px; }
+
+/* ── CARD ── */
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg);
+  padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+.ct { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:#9bb3ff; }
+.cs { font-size:11px; color:var(--text-3); margin-top:2px; font-weight:400; letter-spacing:0; text-transform:none; }
+.cw { position:relative; flex:1; min-height:150px; }
+.divider { height:1px; background:rgba(255,255,255,0.05); flex-shrink:0; }
+
+/* ── RECOMMENDED ROLES CHIPS ── */
+.roles-row { display:flex; flex-wrap:wrap; gap:8px; }
+.role-chip { padding:5px 13px; border-radius:20px; font-size:12px; font-weight:600;
+  background:var(--purple-dim); border:1px solid rgba(167,139,250,0.2); color:var(--purple); }
+
+/* ── SKILLS CLOUD ── */
+.skills-cloud { display:flex; flex-wrap:wrap; gap:7px; align-items:center; }
+.sk { padding:4px 11px; border-radius:20px; font-weight:600; cursor:default;
+  transition:background .2s,transform .15s; }
+.sk:hover { transform:scale(1.06); }
+.sk.matched { background:rgba(74,222,128,0.1); border:1px solid rgba(74,222,128,0.22); color:var(--green); }
+.sk.missing { background:var(--amber-dim); border:1px solid rgba(251,191,36,0.2); color:var(--amber); }
+.sk.neutral { background:var(--blue-dim); border:1px solid rgba(122,162,255,0.15); color:var(--blue); }
+.sk.lg { font-size:15px; padding:6px 14px; }
+.sk.md { font-size:12.5px; }
+.sk.sm { font-size:10.5px; opacity:.75; }
+
+/* ── MISSING SKILLS SECTION ── */
+.gap-row { display:flex; align-items:center; gap:8px; padding:6px 0; }
+.gap-row + .gap-row { border-top:1px solid rgba(255,255,255,0.04); }
+.gap-icon { font-size:12px; flex-shrink:0; }
+.gap-skill { font-size:12.5px; color:var(--amber); font-weight:500; }
+.gap-count { font-size:10.5px; color:var(--text-3); margin-left:auto; }
+
+/* ── TOP 3 SCORE RINGS ── */
+.rings-row { display:flex; gap:12px; justify-content:space-around; }
+.ring-wrap { display:flex; flex-direction:column; align-items:center; gap:5px; cursor:default; }
+.ring-label { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--text-3); max-width:82px; text-align:center; line-height:1.3; }
+.ring-company { font-size:10.5px; color:var(--text-2); font-weight:500; max-width:82px;
+  text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── COMPANY BARS ── */
+.co-row { display:flex; align-items:center; gap:10px; padding:5px 0; }
+.co-row + .co-row { border-top:1px solid rgba(255,255,255,0.04); }
+.co-name { font-size:12px; font-weight:500; color:var(--text-2); width:110px; flex-shrink:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.co-bar-bg { flex:1; background:rgba(255,255,255,0.05); border-radius:4px; height:5px; overflow:hidden; }
+.co-bar { height:100%; background:linear-gradient(90deg,var(--blue),#5b7fff);
+  border-radius:4px; width:0; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+.co-score { font-size:11px; color:var(--green); width:36px; text-align:right; flex-shrink:0; font-weight:600; }
+
+/* ── JOB TABLE ── */
+.tbl { width:100%; border-collapse:collapse; }
+.tbl th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--text-3); text-align:left; padding:0 10px 10px; }
+.tbl td { font-size:12.5px; color:var(--text-2); padding:9px 10px;
+  border-top:1px solid rgba(255,255,255,0.04); }
+.tbl tr:hover td { background:rgba(122,162,255,0.03); }
+.tbl .ttl { color:var(--blue); font-weight:500; max-width:220px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tbl .loc { color:var(--text-3); font-size:11.5px; }
+.mb { display:inline-flex; align-items:center; padding:2px 8px;
+  border-radius:10px; font-size:11px; font-weight:700; }
+.mb.hi { background:rgba(74,222,128,0.12);  color:var(--green); }
+.mb.md { background:var(--blue-dim);         color:var(--blue); }
+.mb.lo { background:var(--amber-dim);        color:var(--amber); }
+.level-chip { display:inline-flex; padding:2px 8px; border-radius:10px;
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+.level-chip.experienced { background:rgba(74,222,128,0.1); color:var(--green); }
+.level-chip.junior      { background:var(--blue-dim);      color:var(--blue); }
+.level-chip.senior      { background:var(--purple-dim);    color:var(--purple); }
+.apply-btn { padding:4px 11px; border-radius:6px; border:1px solid rgba(122,162,255,0.2);
+  background:transparent; color:var(--blue); font-family:inherit; font-size:11.5px;
+  font-weight:600; cursor:pointer; transition:background .2s,border-color .2s; }
+.apply-btn:hover { background:var(--blue-dim); border-color:rgba(122,162,255,0.35); }
+.apply-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+/* ── EMPTY ── */
+.empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; padding:30px 20px; color:var(--text-3); font-size:13px; text-align:center; }
+.empty .ei { font-size:26px; opacity:.3; }
+
+/* ── LOADING BAR ── */
+#lbar { position:fixed; top:0; left:0; height:2px; z-index:999;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  width:0; transition:width .35s ease; }
+
+/* ── REFRESH ── */
+.rbtn { background:var(--blue-dim); border:1px solid rgba(122,162,255,0.2);
+  color:var(--blue); font-family:inherit; font-size:12px; font-weight:600;
+  padding:6px 13px; border-radius:var(--r-sm); cursor:pointer;
+  transition:background .2s; display:flex; align-items:center; gap:6px; }
+.rbtn:hover { background:rgba(122,162,255,0.14); }
+.rbtn.spin svg { animation:spin .85s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
-
 <body>
 
-<aside class="cand-sidebar">
- <a href="/candidate-dashboard.html" style="text-decoration:none;"><h2 class="cand-brand">BeyondMatch</h2></a>
-  <nav class="cand-menu">
-    <a href="candidate-dashboard.html" class="cand-menu-item active">Dashboard</a>
-    <a href="resume.html"              class="cand-menu-item">Resume Analysis</a>
-    <a href="jobmatches.html"          class="cand-menu-item">Job Matches</a>
-    <a href="savedjobs.html"           class="cand-menu-item">Saved Jobs</a>
-    <a href="locatehire.html"          class="cand-menu-item">LocateHire</a>
-    <a href="settings.html"            class="cand-menu-item">Settings</a>
+<div id="lbar"></div>
+
+<aside class="sidebar">
+  <a href="/candidate-dashboard.html" class="brand">BeyondMatch</a>
+  <nav class="nav">
+    <a href="candidate-dashboard.html" class="nav-link active">Dashboard</a>
+    <a href="resume.html"              class="nav-link">Resume Analysis</a>
+    <a href="jobmatches.html"          class="nav-link">Job Matches</a>
+    <a href="savedjobs.html"           class="nav-link">Saved Jobs</a>
+    <a href="locatehire.html"          class="nav-link">LocateHire</a>
+    <a href="settings.html"            class="nav-link">Settings</a>
   </nav>
   <button class="logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
 </aside>
 
-<main class="cand-main">
+<main class="main">
 
-  <div class="cand-page-title">
-    <h1>Job Market Overview</h1>
-    <p>Data-driven insights into job availability, match scores, and hiring trends.</p>
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>My Dashboard</h1>
+      <p id="sub">Loading your personalised insights…</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div class="cand-pill" id="pill" style="display:none;">
+        <div class="avatar" id="av">?</div>
+        <div>
+          <div class="pill-name" id="pname">—</div>
+          <div class="pill-role" id="prole">—</div>
+          <div class="pill-id"   id="pid">—</div>
+        </div>
+      </div>
+      <button class="rbtn" id="rbtn" onclick="boot()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
   </div>
 
-  <div class="powerbi-card">
-    <div class="powerbi-label">Candidate Insights Dashboard</div>
-    <iframe
-      src="https://app.powerbi.com/view?r=eyJrIjoiYjlkZDZmYzAtMmNlZC00ZjdkLWIzNDctMTlhNTRmOWYzNDk5IiwidCI6IjljMTg1NzE0LWYwYWYtNDgyNi1iZDRiLTdiOTg3ZjZkZDkyMSJ9"
-      allowfullscreen>
-    </iframe>
+  <!-- KPI STRIP -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <span class="kpi-icon">🎯</span>
+      <div class="kpi-label">Avg Match Score</div>
+      <div class="kpi-value" id="kAvg"><div class="shim" style="height:26px;width:55px;"></div></div>
+      <div class="kpi-sub"   id="kAvgSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">💼</span>
+      <div class="kpi-label">Jobs Found</div>
+      <div class="kpi-value" id="kTotal"><div class="shim" style="height:26px;width:40px;"></div></div>
+      <div class="kpi-sub"   id="kTotalSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">⭐</span>
+      <div class="kpi-label">Top Match Score</div>
+      <div class="kpi-value" id="kTop"><div class="shim" style="height:26px;width:55px;"></div></div>
+      <div class="kpi-sub"   id="kTopSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">⚡</span>
+      <div class="kpi-label">Strong Matches</div>
+      <div class="kpi-value" id="kStrong"><div class="shim" style="height:26px;width:35px;"></div></div>
+      <div id="kStrongBadge"></div>
+      <div class="kpi-sub" style="font-size:10px;opacity:.6;margin-top:2px;">jobs scoring ≥70%</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">🧩</span>
+      <div class="kpi-label">Skills You Have</div>
+      <div class="kpi-value" id="kSkills"><div class="shim" style="height:26px;width:35px;"></div></div>
+      <div class="kpi-sub" id="kSkillsSub">—</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1: Match scores bar | Location | Skills ratio -->
+  <div class="g3">
+
+    <!-- Top matches bar chart — shows actual score per job, not just bands -->
+    <div class="card">
+      <div><div class="ct">Your Match Scores</div><div class="cs" id="cMatchSub">top matched jobs ranked by score</div></div>
+      <div class="cw" style="min-height:180px;"><canvas id="cDist"></canvas></div>
+    </div>
+
+    <!-- Location bar -->
+    <div class="card">
+      <div><div class="ct">Jobs by Location</div><div class="cs">where your matches are</div></div>
+      <div class="cw" style="min-height:180px;"><canvas id="cLoc"></canvas></div>
+    </div>
+
+    <!-- Matched vs Missing skills ratio per job -->
+    <div class="card">
+      <div><div class="ct">Skills Fit per Job</div><div class="cs">matched vs missing skills ratio</div></div>
+      <div class="cw" style="min-height:180px;"><canvas id="cSkillRatio"></canvas></div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2: Skills + Recommended Roles | Companies + Missing Skills -->
+  <div class="g2">
+
+    <!-- LEFT: Skills cloud + Recommended Roles + Top 3 rings -->
+    <div class="card" style="gap:14px;">
+
+      <!-- Recommended roles (from API response root) -->
+      <div>
+        <div class="ct" style="margin-bottom:8px;">Recommended Roles for You</div>
+        <div class="roles-row" id="rolesRow">
+          <div class="shim" style="height:28px;width:100px;border-radius:20px;"></div>
+          <div class="shim" style="height:28px;width:80px;border-radius:20px;"></div>
+          <div class="shim" style="height:28px;width:90px;border-radius:20px;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Skills you have matched -->
+      <div>
+        <div class="ct" style="margin-bottom:8px;">Your Matched Skills</div>
+        <div class="skills-cloud" id="skillCloud">
+          <div class="shim" style="height:26px;width:55px;border-radius:20px;"></div>
+          <div class="shim" style="height:30px;width:80px;border-radius:20px;"></div>
+          <div class="shim" style="height:26px;width:45px;border-radius:20px;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Top 3 score rings -->
+      <div>
+        <div class="ct" style="margin-bottom:10px;">Your Top 3 Matches</div>
+        <div class="rings-row" id="rings">
+          <div class="shim" style="height:80px;width:70px;border-radius:8px;"></div>
+          <div class="shim" style="height:80px;width:70px;border-radius:8px;"></div>
+          <div class="shim" style="height:80px;width:70px;border-radius:8px;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Top match job previews — fills space, shows real context -->
+      <div>
+        <div class="ct" style="margin-bottom:10px;">What These Roles Look Like</div>
+        <div id="jobPreviews">
+          <div class="shim" style="height:54px;border-radius:8px;margin-bottom:8px;"></div>
+          <div class="shim" style="height:54px;border-radius:8px;margin-bottom:8px;"></div>
+          <div class="shim" style="height:54px;border-radius:8px;"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Top companies + Missing skills gap -->
+    <div class="card" style="gap:16px;">
+
+      <div>
+        <div class="ct" style="margin-bottom:10px;">Top Companies Hiring You</div>
+        <div id="coList">
+          <div class="shim" style="height:13px;border-radius:4px;margin-bottom:10px;"></div>
+          <div class="shim" style="height:13px;border-radius:4px;margin-bottom:10px;width:80%;"></div>
+          <div class="shim" style="height:13px;border-radius:4px;margin-bottom:10px;width:65%;"></div>
+          <div class="shim" style="height:13px;border-radius:4px;width:50%;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="ct" style="margin-bottom:2px;">Skill Gaps to Close</div>
+        <div class="cs" style="margin-bottom:10px;">skills in demand that you're missing</div>
+        <div id="gapList">
+          <div class="shim" style="height:28px;border-radius:6px;margin-bottom:8px;"></div>
+          <div class="shim" style="height:28px;border-radius:6px;width:75%;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Market snapshot — computable from matches + jobs batch, honestly labelled -->
+      <div>
+        <div class="ct" style="margin-bottom:2px;">Market Snapshot</div>
+        <div class="cs" style="margin-bottom:10px;">from your current match results</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="marketGrid">
+          <div class="shim" style="height:52px;border-radius:10px;"></div>
+          <div class="shim" style="height:52px;border-radius:10px;"></div>
+          <div class="shim" style="height:52px;border-radius:10px;"></div>
+          <div class="shim" style="height:52px;border-radius:10px;"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JOB TABLE -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="ct">Your Recommended Jobs</div>
+        <div class="cs" id="tblSub">personalised matches for your resume</div>
+      </div>
+      <a href="jobmatches.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600;opacity:.85;">
+        View all →
+      </a>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Job Title</th>
+          <th>Company</th>
+          <th>Location</th>
+          <th>Matched Skills</th>
+          <th>Level</th>
+          <th>Match</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tblBody">
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;margin-bottom:6px;"></div></td></tr>
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;margin-bottom:6px;"></div></td></tr>
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </main>
 
+<script>
+/* =====================================================
+   CONFIG
+===================================================== */
+const API = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
+let CH = {};  // chart instances
+
+Chart.defaults.color = "#6b7fa8";
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11.5;
+
+const PAL = [
+  "rgba(122,162,255,.82)","rgba(74,222,128,.78)","rgba(167,139,250,.78)",
+  "rgba(251,191,36,.78)","rgba(248,113,113,.78)","rgba(56,189,248,.78)"
+];
+
+/* =====================================================
+   LOADING BAR
+===================================================== */
+function bar(p) {
+  const el = document.getElementById("lbar");
+  el.style.width = p + "%";
+  if (p >= 100) setTimeout(() => el.style.width = "0", 600);
+}
+
+/* =====================================================
+   API FETCH (matches exact existing pattern from api.js)
+===================================================== */
+async function apiFetch(path) {
+  const r = await fetch(API + path, { headers: { "Content-Type": "application/json" } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const txt = await r.text();
+  if (!txt) return {};
+  const d = JSON.parse(txt);
+  if (d.statusCode && typeof d.body === "string") {
+    try { return JSON.parse(d.body); } catch { return {}; }
+  }
+  return d;
+}
+
+/* =====================================================
+   RESOLVE CANDIDATE from Firestore
+===================================================== */
+async function resolveCandidate() {
+  if (!window.auth?.currentUser || !window.db) return null;
+  try {
+    const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const uSnap = await getDoc(doc(window.db, "users", window.auth.currentUser.uid));
+    if (!uSnap.exists()) return null;
+    const ud = uSnap.data();
+    const cid = ud.latest_candidate_id || ud.candidate_id;
+    if (!cid) return null;
+    let cd = {};
+    try {
+      const cSnap = await getDoc(doc(window.db, "candidates", cid));
+      if (cSnap.exists()) cd = cSnap.data();
+    } catch(e) {}
+    return {
+      id:      cid,
+      name:    cd.name || ud.email?.split("@")[0] || "Candidate",
+      email:   ud.email || "",
+      role:    cd.applied_role || "General",
+      isLocal: cid.startsWith("local_")
+    };
+  } catch(e) { console.warn("resolveCandidate:", e); return null; }
+}
+
+/* =====================================================
+   HELPERS
+===================================================== */
+const $  = id => document.getElementById(id);
+const st = (id, v) => { const e=$(id); if(e) e.textContent = v; };
+const capitalise = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const ucWords = s => s ? s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()) : s;
+
+/* =====================================================
+   CANDIDATE PILL
+===================================================== */
+function showPill(c) {
+  const ini = c.name.trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  $("av").textContent    = ini;
+  $("pname").textContent = c.name;
+  $("prole").textContent = c.role;
+  $("pid").textContent   = `ID: ${c.id}`;
+  $("pill").style.display = "flex";
+}
+
+/* =====================================================
+   KPIs  (personalised from matches response)
+===================================================== */
+function renderKPIs(matches, meta) {
+  const scores  = matches.map(m => m.match_percent).filter(Boolean);
+  const avg     = scores.length ? +(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : 0;
+  const top     = scores.length ? Math.max(...scores) : 0;
+  const topJob  = matches.find(m => m.match_percent === top);
+
+  // Strong = ≥70% (the threshold the matching engine uses)
+  const STRONG_THRESHOLD = 70;
+  const strong  = scores.filter(s => s >= STRONG_THRESHOLD).length;
+
+  // Unique skills you have that appear across your matches
+  const allMatchedSkills = new Set(matches.flatMap(m => m.matched_skills || []));
+  // Unique skills you're missing across your matches
+  const allMissingSkills = new Set(matches.flatMap(m => m.missing_skills || []));
+
+  st("kAvg",    avg   ? `${avg}%`  : "—");
+  st("kTotal",  matches.length     || "—");
+  st("kTop",    top   ? `${+top.toFixed(1)}%` : "—");
+  st("kStrong", strong             || "—");
+  st("kSkills", allMatchedSkills.size || "—");
+
+  // Sub-text: precise and honest
+  const avgQual = avg >= 75 ? "🟢 Excellent fit" : avg >= 65 ? "🟡 Good fit" : avg ? "🟠 Moderate fit" : "upload resume";
+  st("kAvgSub",   avgQual);
+  // "13 returned" is honest — top_n=50 but only 13 exist for this candidate
+  st("kTotalSub", `${matches.length} returned by engine`);
+  st("kTopSub",   topJob?.company ? `at ${topJob.company}` : "your best score");
+
+  // Strong matches badge — show threshold so user knows what it means
+  const badge = $("kStrongBadge");
+  if (badge) {
+    const pct = scores.length ? Math.round((strong / scores.length) * 100) : 0;
+    const col  = pct >= 80 ? "green" : pct >= 50 ? "blue" : "amber";
+    badge.innerHTML = `<div class="kpi-badge ${col}">≥${STRONG_THRESHOLD}% score</div>`;
+  }
+
+  // Skills: show matched vs missing gap
+  st("kSkillsSub", `you have · ${allMissingSkills.size} gaps`);
+}
+
+/* =====================================================
+   CHART 1: TOP MATCHES BAR — actual score per job (horizontal)
+   Much more useful than a donut when scores all cluster in 70-79%
+===================================================== */
+function renderDist(matches) {
+  // Take top 10 by score, show each as a bar
+  const top = matches.slice(0, 10);
+  st("cMatchSub", `top ${top.length} of ${matches.length} matched jobs`);
+
+  // Short labels: "Data Analyst · Robert Half"
+  const labels = top.map(m => {
+    const t = (m.title||"Role").split(" ").slice(0,2).join(" ");
+    const c = (m.company||"").split(" ")[0];
+    return `${t} · ${c}`;
+  });
+  const data   = top.map(m => +(m.match_percent||0).toFixed(1));
+  const colors = data.map(v => v>=80?"rgba(74,222,128,.75)":v>=70?"rgba(122,162,255,.75)":"rgba(251,191,36,.75)");
+
+  const ctx = $("cDist"); if(!ctx) return;
+  if(CH.dist) CH.dist.destroy();
+  CH.dist = new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[{ label:"Match %", data, backgroundColor:colors, borderRadius:4, borderSkipped:false }] },
+    options:{
+      indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:c=>`  ${c.parsed.x}% match` }}
+      },
+      scales:{
+        x:{
+          min:60, max:100,
+          grid:{color:"rgba(255,255,255,.04)"}, ticks:{color:"#6b7fa8", callback:v=>v+"%"},
+          border:{display:false}
+        },
+        y:{ grid:{display:false}, ticks:{color:"#b0bcd8", font:{size:10}}, border:{display:false}}
+      }
+    }
+  });
+}
+
+/* =====================================================
+   CHART 2: LOCATION — shorten long labels so they fit
+===================================================== */
+function renderLoc(matches) {
+  const lm = {};
+  matches.forEach(m => {
+    if(!m.location) return;
+    // Shorten "Hampshire, South East England" → "Hampshire, UK" etc
+    let k = m.location.trim();
+    // If too long, take first segment before comma
+    if(k.length > 22) k = k.split(",")[0].trim();
+    lm[k] = (lm[k]||0)+1;
+  });
+  const sorted = Object.entries(lm).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const ctx = $("cLoc"); if(!ctx) return;
+  if(CH.loc) CH.loc.destroy();
+  CH.loc = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels: sorted.map(e=>e[0]),
+      datasets:[{ label:"Jobs", data:sorted.map(e=>e[1]),
+        backgroundColor:"rgba(167,139,250,.65)", hoverBackgroundColor:"rgba(167,139,250,.9)",
+        borderRadius:5, borderSkipped:false }]
+    },
+    options:{
+      indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{ label:c=>`  ${c.parsed.x} jobs` }}},
+      scales:{
+        x:{
+          ticks:{ color:"#6b7fa8", stepSize:1 },
+          grid:{color:"rgba(255,255,255,.04)"}, border:{display:false}
+        },
+        y:{ grid:{display:false}, ticks:{color:"#b0bcd8", font:{size:10.5}}, border:{display:false}}
+      }
+    }
+  });
+}
+
+/* =====================================================
+   CHART 3: SKILLS FIT RATIO — stacked bar per top job
+   Shows matched skills vs missing skills count per match
+   Uses matched_skills + missing_skills from API directly
+===================================================== */
+function renderSkillRatio(matches) {
+  const top = matches.slice(0, 8);
+  const labels = top.map(m => {
+    const t = (m.title||"Role").split(" ").slice(0,2).join(" ");
+    const c = (m.company||"").split(" ")[0];
+    return `${t} · ${c}`;
+  });
+  const matched = top.map(m => (m.matched_skills||[]).length);
+  const missing = top.map(m => (m.missing_skills||[]).length);
+
+  const ctx = $("cSkillRatio"); if(!ctx) return;
+  if(CH.sr) CH.sr.destroy();
+  CH.sr = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels,
+      datasets:[
+        { label:"Matched", data:matched, backgroundColor:"rgba(74,222,128,.7)", borderRadius:4, borderSkipped:false, stack:"s" },
+        { label:"Missing", data:missing, backgroundColor:"rgba(248,113,113,.5)", borderRadius:0, borderSkipped:false, stack:"s" }
+      ]
+    },
+    options:{
+      indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:"bottom", labels:{ padding:10,boxWidth:9,boxHeight:9,borderRadius:3,useBorderRadius:true }},
+        tooltip:{ callbacks:{ label:c=>`  ${c.parsed.x} ${c.dataset.label.toLowerCase()} skills` }}
+      },
+      scales:{
+        x:{ grid:{color:"rgba(255,255,255,.04)"}, ticks:{color:"#6b7fa8",stepSize:1}, border:{display:false}, stacked:true },
+        y:{ grid:{display:false}, ticks:{color:"#b0bcd8",font:{size:10}}, border:{display:false}, stacked:true }
+      }
+    }
+  });
+}
+
+/* =====================================================
+   RECOMMENDED ROLES (from API response root)
+===================================================== */
+function renderRoles(roles) {
+  const el = $("rolesRow"); if(!el) return;
+  if(!roles?.length){ el.innerHTML=`<span style="color:var(--text-3);font-size:12px;">Not available</span>`; return; }
+  el.innerHTML = roles.map(r =>
+    `<span class="role-chip">${ucWords(r)}</span>`
+  ).join("");
+}
+
+/* =====================================================
+   SKILLS CLOUD (from matched_skills across all matches)
+===================================================== */
+function renderSkills(matches) {
+  const el = $("skillCloud"); if(!el) return;
+  const sc = {};
+  matches.forEach(m => (m.matched_skills||[]).forEach(s=>{ sc[s]=(sc[s]||0)+1; }));
+  const sorted = Object.entries(sc).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length){ el.innerHTML=`<span style="color:var(--text-3);font-size:12px;">No skill data yet</span>`; return; }
+  const max = sorted[0][1];
+  el.innerHTML = sorted.map(([s,c])=>{
+    const r = c/max;
+    const sz = r>0.65?"lg":r>0.35?"md":"sm";
+    const label = ucWords(s);
+    return `<span class="sk matched ${sz}" title="Required by ${c} of your matched jobs">${label}</span>`;
+  }).join("");
+}
+
+/* =====================================================
+   SKILL GAPS (from missing_skills across matches)
+===================================================== */
+function renderGaps(matches) {
+  const el = $("gapList"); if(!el) return;
+  const gc = {};
+  matches.forEach(m => (m.missing_skills||[]).forEach(s=>{ gc[s]=(gc[s]||0)+1; }));
+  const sorted = Object.entries(gc).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if(!sorted.length){
+    el.innerHTML=`<div style="color:var(--text-3);font-size:12.5px;padding:8px 0;">
+      ✅ No major skill gaps found in your top matches
+    </div>`;
+    return;
+  }
+  el.innerHTML = sorted.map(([s,c])=>`
+    <div class="gap-row">
+      <span class="gap-icon">△</span>
+      <span class="gap-skill">${ucWords(s)}</span>
+      <span class="gap-count">missing in ${c} job${c>1?"s":""}</span>
+    </div>`).join("");
+}
+
+/* =====================================================
+   TOP 3 SCORE RINGS
+===================================================== */
+function renderRings(matches) {
+  const el = $("rings"); if(!el) return;
+  const top3 = matches.slice(0,3);
+  if(!top3.length){ el.innerHTML=`<div class="empty"><span class="ei">🔍</span>No matches yet</div>`; return; }
+  el.innerHTML = top3.map(m => {
+    const pct = Math.round(m.match_percent);
+    const R=30,cx=40,cy=40, circ=2*Math.PI*R, off=circ-(pct/100)*circ;
+    const col = pct>=80?"#4ade80":pct>=70?"#7aa2ff":"#fbbf24";
+    return `
+      <div class="ring-wrap" title="${m.title} at ${m.company}">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="7"/>
+          <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${col}" stroke-width="7"
+            stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"
+            stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"
+            style="transition:stroke-dashoffset 1.3s cubic-bezier(.4,0,.2,1)"/>
+          <text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="13" font-weight="700" fill="${col}">${pct}%</text>
+        </svg>
+        <div class="ring-label">${(m.title||"").split(" ").slice(0,2).join(" ")}</div>
+        <div class="ring-company">${(m.company||"").split(" ")[0]}</div>
+      </div>`;
+  }).join("");
+}
+
+/* =====================================================
+   TOP COMPANIES
+===================================================== */
+function renderCompanies(matches) {
+  const el = $("coList"); if(!el) return;
+  const cm = {};
+  matches.forEach(m => {
+    const co = m.company;
+    if(!co) return;
+    if(!cm[co]) cm[co] = { count:0, maxScore:0 };
+    cm[co].count++;
+    cm[co].maxScore = Math.max(cm[co].maxScore, m.match_percent||0);
+  });
+  const sorted = Object.entries(cm).sort((a,b)=>b[1].maxScore-a[1].maxScore).slice(0,5);
+  if(!sorted.length){ el.innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🏢</span>No data</div>`; return; }
+  const maxS = sorted[0][1].maxScore;
+  el.innerHTML = sorted.map(([name,d])=>`
+    <div class="co-row">
+      <span class="co-name" title="${name}">${name}</span>
+      <div class="co-bar-bg"><div class="co-bar" data-w="${Math.round((d.maxScore/maxS)*100)}"></div></div>
+      <span class="co-score">${Math.round(d.maxScore)}%</span>
+    </div>`).join("");
+  requestAnimationFrame(()=>{
+    document.querySelectorAll(".co-bar[data-w]").forEach(b => { b.style.width = b.dataset.w + "%"; });
+  });
+}
+
+/* =====================================================
+   JOB PREVIEWS (fills empty space below rings)
+   Uses description_preview from matches API
+===================================================== */
+function renderJobPreviews(matches) {
+  const el = $("jobPreviews"); if(!el) return;
+  const top3 = matches.slice(0,3);
+  if(!top3.length){ el.innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🔍</span>No data</div>`; return; }
+  el.innerHTML = top3.map((m,i) => {
+    const pct    = Math.round(m.match_percent||0);
+    const col    = pct>=80?"var(--green)":pct>=70?"var(--blue)":"var(--amber)";
+    const hasUrl = m.apply_url && m.apply_url.trim();
+
+    // Skill chips — green for matched, amber for missing
+    const matchedChips = (m.matched_skills||[]).map(s =>
+      `<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;
+        background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);color:var(--green);">
+        ${ucWords(s)}</span>`
+    ).join("");
+    const missingChips = (m.missing_skills||[]).map(s =>
+      `<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;
+        background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.18);color:var(--amber);">
+        △ ${ucWords(s)}</span>`
+    ).join("");
+
+    // Apply button: real URL or Google search fallback
+    const applyEl = hasUrl
+      ? `<a href="${m.apply_url}" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;
+             border-radius:6px;border:1px solid rgba(122,162,255,0.25);
+             background:rgba(122,162,255,0.08);color:var(--blue);font-size:11px;
+             font-weight:600;text-decoration:none;margin-top:2px;width:fit-content;
+             transition:background .2s;"
+           onmouseover="this.style.background='rgba(122,162,255,0.15)'"
+           onmouseout="this.style.background='rgba(122,162,255,0.08)'">
+           Apply →
+         </a>`
+      : `<a href="https://www.google.com/search?q=${encodeURIComponent((m.title||'')+" "+(m.company||'')+" job apply")}"
+           target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;
+             border-radius:6px;border:1px solid rgba(107,127,168,0.2);
+             background:rgba(107,127,168,0.06);color:var(--text-3);font-size:11px;
+             font-weight:600;text-decoration:none;margin-top:2px;width:fit-content;"
+           title="No direct link — search Google for this role">
+           🔍 Search Job
+         </a>`;
+
+    return `
+      <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(122,162,255,0.08);
+        border-radius:10px;padding:11px 13px;margin-bottom:${i<2?"8px":"0"};
+        display:flex;flex-direction:column;gap:6px;">
+
+        <!-- Header row -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--text-1);
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.title||"—"}</div>
+          <span style="font-size:11.5px;font-weight:700;color:${col};flex-shrink:0;">${pct}%</span>
+        </div>
+
+        <!-- Company + location -->
+        <div style="font-size:11px;color:var(--text-3);">${m.company||"—"} · ${m.location||"—"}</div>
+
+        <!-- Skill chips -->
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          ${matchedChips}${missingChips}
+        </div>
+
+        <!-- Apply -->
+        ${applyEl}
+      </div>`;
+  }).join("");
+}
+
+/* =====================================================
+   MARKET SNAPSHOT — computable from the matches batch
+   No fabricated totals. Uses only what we actually have.
+===================================================== */
+function renderMarket(allJobs, matches) {
+  const el = $("marketGrid"); if(!el) return;
+
+  // All computable from real data we have
+  const totalInBatch  = allJobs.length;  // honest: jobs in this page
+  const uniqueCountries = new Set(allJobs.map(j=>j.country).filter(Boolean)).size;
+  const withApply = matches.filter(m => m.apply_url && m.apply_url.trim()).length;
+  const applyPct  = matches.length ? Math.round((withApply/matches.length)*100) : 0;
+  const uniqueCoInMatches = new Set(matches.map(m=>m.company).filter(Boolean)).size;
+
+  el.innerHTML = [
+    { icon:"💼", label:"Jobs in Batch",        val: totalInBatch.toLocaleString(),  sub:"currently loaded" },
+    { icon:"🏢", label:"Companies (Matches)",  val: uniqueCoInMatches,               sub:"matching your profile" },
+    { icon:"🌐", label:"Countries Active",     val: uniqueCountries,                 sub:"in job listings" },
+    { icon:"🔗", label:"Apply Links",          val: `${applyPct}%`,                  sub:"of your matches" }
+  ].map(s=>`
+    <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(122,162,255,0.07);
+      border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;">
+      <div style="font-size:13px;">${s.icon}</div>
+      <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;color:var(--text-1);">${s.val}</div>
+      <div style="font-size:10px;color:var(--text-3);line-height:1.3;">${s.label}</div>
+      <div style="font-size:9.5px;color:var(--text-3);opacity:.65;">${s.sub}</div>
+    </div>`).join("");
+}
+
+/* =====================================================
+   JOB TABLE
+===================================================== */
+function renderTable(matches, cid) {
+  const el = $("tblBody"); if(!el) return;
+  st("tblSub", `${matches.length} personalised matches · ${cid}`);
+  if(!matches.length){
+    el.innerHTML=`<tr><td colspan="7"><div class="empty"><span class="ei">🔍</span>No matches. Upload a resume to start matching.</div></td></tr>`;
+    return;
+  }
+  el.innerHTML = matches.slice(0,10).map(m => {
+    const pct = Math.round(m.match_percent||0);
+    const cls = pct>=75?"hi":pct>=65?"md":"lo";
+    const lvl = m.level || "junior";
+    const skills = (m.matched_skills||[]).slice(0,3).map(s=>ucWords(s)).join(", ") || "—";
+    const hasUrl = m.apply_url && m.apply_url.trim();
+    return `
+      <tr>
+        <td class="ttl" title="${m.title}">${m.title||"—"}</td>
+        <td>${m.company||"—"}</td>
+        <td class="loc">${m.location||"—"}</td>
+        <td style="font-size:11.5px;color:var(--green);">${skills}</td>
+        <td><span class="level-chip ${lvl}">${capitalise(lvl)}</span></td>
+        <td><span class="mb ${cls}">${pct}%</span></td>
+        <td>${hasUrl
+          ? `<button class="apply-btn" onclick="window.open('${m.apply_url}','_blank')">Apply</button>`
+          : `<button class="apply-btn" style="color:var(--text-3);border-color:rgba(107,127,168,0.2);"
+               onclick="window.open('https://www.google.com/search?q=${encodeURIComponent((m.title||'')+" "+(m.company||'')+" job apply")}','_blank')"
+               title="No direct link — search Google for this role">🔍 Search</button>`
+        }</td>
+      </tr>`;
+  }).join("");
+}
+
+/* =====================================================
+   EMPTY STATE
+===================================================== */
+function showEmpty(msg) {
+  st("sub", msg);
+  $("tblBody").innerHTML = `<tr><td colspan="7"><div class="empty">
+    <span class="ei">📄</span><strong>No resume found</strong>
+    <p>Go to <a href="resume.html" style="color:var(--blue)">Resume Analysis</a> to upload your CV.</p>
+  </div></td></tr>`;
+  ["kAvg","kTotal","kTop","kStrong","kSkills"].forEach(id=>st(id,"—"));
+  $("rolesRow").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Not available</span>`;
+  $("skillCloud").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Upload resume to see skills</span>`;
+  $("gapList").innerHTML=`<span style="color:var(--text-3);font-size:12px;">No data yet</span>`;
+  $("rings").innerHTML=`<div class="empty" style="padding:12px;"><span class="ei">📄</span>No data</div>`;
+  $("coList").innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🏢</span>No data</div>`;
+}
+
+/* =====================================================
+   MAIN BOOT
+===================================================== */
+async function boot() {
+  const btn = $("rbtn");
+  btn?.classList.add("spin");
+  bar(10);
+
+  try {
+    // 1 — resolve candidate from Firestore
+    const cand = await resolveCandidate();
+    bar(25);
+
+    if (!cand) {
+      showEmpty("Please log in to view your dashboard.");
+      bar(100); btn?.classList.remove("spin"); return;
+    }
+    showPill(cand);
+
+    if (cand.isLocal) {
+      showEmpty("Upload your resume to unlock personalised matching.");
+      bar(100); btn?.classList.remove("spin"); return;
+    }
+
+    st("sub", `Personalised dashboard for ${cand.name}`);
+
+    // 2 — fetch candidate matches + all jobs in parallel
+    const [matchRes, jobsRes] = await Promise.all([
+      apiFetch(`/matches?candidate_id=${cand.id}&top_n=50&offset=0`).catch(e=>{console.warn(e);return{};}),
+      apiFetch("/jobs").catch(e=>{console.warn(e);return[];})
+    ]);
+    bar(70);
+
+    // Parse matches — response root has mode, recommended_roles, total_matches, matches[]
+    const matches  = Array.isArray(matchRes.matches) ? matchRes.matches
+                   : Array.isArray(matchRes) ? matchRes : [];
+    const roles    = matchRes.recommended_roles || [];
+    const meta     = { total_matches: matchRes.total_matches ?? matches.length };
+
+    // Parse jobs
+    const allJobs  = Array.isArray(jobsRes) ? jobsRes
+                   : Array.isArray(jobsRes.jobs) ? jobsRes.jobs : [];
+
+    if (!matches.length) {
+      showEmpty(`No matches yet for ${cand.name} — try updating your resume.`);
+      // Still render market from jobs
+      if(allJobs.length) renderMarket(allJobs, matches);
+      bar(100); btn?.classList.remove("spin"); return;
+    }
+
+    // 3 — render everything
+    renderKPIs(matches, meta);
+    renderRoles(roles);
+    renderDist(matches);
+    renderLoc(matches);
+    renderSkillRatio(matches);
+    renderSkills(matches);
+    renderGaps(matches);
+    renderRings(matches);
+    renderJobPreviews(matches);
+    renderCompanies(matches);
+    renderMarket(allJobs, matches);
+    renderTable(matches, cand.id);
+
+    bar(100);
+
+  } catch(err) {
+    console.error("Dashboard error:", err);
+    st("sub","Failed to load — please refresh.");
+    bar(100);
+  }
+  btn?.classList.remove("spin");
+}
+
+/* =====================================================
+   INIT — poll until Firebase auth + db ready
+===================================================== */
+(function init() {
+  let n = 0;
+  const t = setInterval(() => {
+    n++;
+    if (window.auth !== undefined && window.db !== undefined) {
+      clearInterval(t);
+      if (typeof window.auth.onAuthStateChanged === "function") {
+        window.auth.onAuthStateChanged(user => { if (user) boot(); });
+      } else { boot(); }
+    }
+    if (n > 50) { clearInterval(t); console.warn("Auth timeout"); bar(100); }
+  }, 100);
+})();
+</script>
+
 <script type="module" src="auth.js"></script>
 <script type="module" src="api.js"></script>
-
 </body>
 </html>

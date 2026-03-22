@@ -3,36 +3,583 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard – BeyondMatch</title>
+  <title>Recruiter Dashboard – BeyondMatch</title>
   <link rel="stylesheet" href="recruiter-matches.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root { --r-lg:14px; --r-md:10px; --r-sm:8px; --purple:#c084fc; --purple-dim:rgba(192,132,252,0.10); --amber-dim:rgba(251,191,36,0.10); }
+#lbar{position:fixed;top:0;left:0;height:2px;z-index:999;background:linear-gradient(90deg,var(--blue),var(--purple));width:0;transition:width .35s ease;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.shim{background:linear-gradient(90deg,#1a2035 25%,#212942 50%,#1a2035 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
+.main{padding:24px 24px 48px;display:flex;flex-direction:column;gap:16px;}
+.dash-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.dash-header h1{font-size:20px;font-weight:700;letter-spacing:-0.02em;}
+.dash-header p{font-size:12px;color:var(--text-3);margin-top:3px;}
+.rec-pill{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--card-border);padding:8px 14px;border-radius:30px;}
+.rec-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5b7fff,var(--purple));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.rec-pill-name{font-size:13px;font-weight:600;color:var(--text-1);}
+.rec-pill-org{font-size:11px;color:var(--blue);font-weight:500;}
+.rbtn{background:var(--blue-dim);border:1px solid var(--blue-line);color:var(--blue);font-family:inherit;font-size:12px;font-weight:600;padding:6px 13px;border-radius:var(--r-sm);cursor:pointer;transition:background .2s;display:flex;align-items:center;gap:6px;}
+.rbtn:hover{background:rgba(122,162,255,0.15);}
+.rbtn.spin svg{animation:spin .85s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.kpi-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:14px 16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;transition:border-color .2s,transform .18s;}
+.kpi-card:hover{border-color:var(--blue-line);transform:translateY(-1px);}
+.kpi-icon{position:absolute;right:12px;top:12px;font-size:16px;opacity:.18;}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);}
+.kpi-val{font-size:26px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;}
+.kpi-sub{font-size:11px;color:var(--text-3);}
+.kpi-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700;margin-top:3px;width:fit-content;}
+.kpi-badge.green{background:var(--green-dim);color:var(--green);}
+.kpi-badge.blue{background:var(--blue-dim);color:var(--blue);}
+.kpi-badge.amber{background:var(--amber-dim);color:var(--amber);}
+.g3{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px;}
+.g2{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;}
+.dc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;gap:12px;}
+.ct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-2);}
+.cs{font-size:11px;color:var(--text-3);margin-top:2px;font-weight:400;text-transform:none;letter-spacing:0;}
+.cw{position:relative;flex:1;min-height:160px;}
+.divider{height:1px;background:rgba(255,255,255,0.05);flex-shrink:0;}
+/* Funnel */
+.funnel-row{display:flex;align-items:center;gap:10px;}
+.funnel-lbl{font-size:10.5px;color:var(--text-2);width:110px;flex-shrink:0;}
+.funnel-bg{flex:1;background:rgba(255,255,255,0.05);border-radius:5px;height:22px;overflow:hidden;}
+.funnel-fill{height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:11px;font-weight:700;color:#fff;width:0;transition:width 1.3s cubic-bezier(.4,0,.2,1);}
+.funnel-pct{font-size:11px;color:var(--text-3);width:36px;text-align:right;flex-shrink:0;}
+/* Candidates list */
+.cand-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
+.cand-row+.cand-row{border-top:1px solid rgba(255,255,255,0.04);}
+.cand-ini{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,rgba(122,162,255,.12),rgba(192,132,252,.12));border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);flex-shrink:0;}
+.cand-info{flex:1;min-width:0;}
+.cand-nm{font-size:12.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cand-dt{font-size:11px;color:var(--text-3);}
+/* Gap bars */
+.gap-row-r{display:flex;align-items:center;gap:10px;padding:5px 0;}
+.gap-row-r+.gap-row-r{border-top:1px solid rgba(255,255,255,0.04);}
+.gap-sn{font-size:12px;font-weight:500;color:var(--amber);width:90px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gap-bb{flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:5px;overflow:hidden;}
+.gap-bf{height:100%;background:rgba(251,191,36,.6);border-radius:4px;width:0;transition:width 1.2s cubic-bezier(.4,0,.2,1);}
+.gap-ct{font-size:11px;color:var(--text-3);width:55px;text-align:right;flex-shrink:0;}
+/* Table */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);text-align:left;padding:0 10px 10px;}
+.tbl td{font-size:12.5px;color:var(--text-2);padding:8px 10px;border-top:1px solid rgba(255,255,255,0.04);}
+.tbl tr:hover td{background:rgba(122,162,255,0.03);}
+.ttl{color:var(--blue);font-weight:500;}
+.mb{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+.mb.hi{background:rgba(74,222,128,.12);color:var(--green);}
+.mb.md{background:var(--blue-dim);color:var(--blue);}
+.mb.lo{background:var(--amber-dim);color:var(--amber);}
+.vcbtn{padding:4px 11px;border-radius:6px;border:1px solid var(--blue-line);background:var(--blue-dim);color:var(--blue);font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer;transition:background .2s;text-decoration:none;display:inline-block;}
+.vcbtn:hover{background:var(--blue);color:#080c18;}
+.sk-chip{padding:2px 8px;border-radius:12px;font-size:10.5px;font-weight:600;display:inline-block;}
+.sk-chip.m{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);color:var(--green);}
+.sk-chip.d{background:var(--blue-dim);border:1px solid var(--blue-line);color:var(--blue);}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px 20px;color:var(--text-3);font-size:13px;text-align:center;}
+.empty .ei{font-size:24px;opacity:.3;}
+</style>
 </head>
 <body>
+
+<div id="lbar"></div>
 
 <aside class="sidebar">
   <a href="/rec-dash.html" style="text-decoration:none;"><h2 class="brand">BeyondMatch</h2></a>
   <nav class="menu">
-    <a href="rec-dash.html"      class="menu-item active">Dashboard</a>
-    <a href="rec-jobs.html"      class="menu-item">My Jobs</a>
-    <a href="cand-matches.html"  class="menu-item">Candidate Matches</a>
-    <a href="rec-actions.html"   class="menu-item">Recruiter Actions</a>
-    <a href="settings.html"      class="menu-item">Settings</a>
+    <a href="rec-dash.html"     class="menu-item active">Dashboard</a>
+    <a href="rec-jobs.html"     class="menu-item">My Jobs</a>
+    <a href="cand-matches.html" class="menu-item">Candidate Matches</a>
+    <a href="rec-actions.html"  class="menu-item">Recruiter Actions</a>
+    <a href="settings.html"     class="menu-item">Settings</a>
     <button class="menu-item logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
   </nav>
 </aside>
 
 <main class="main">
-  <div class="page-title">
-    <h1>Hiring Market Overview</h1>
-    <p>Explore hiring trends, job matches, and opportunities across the ecosystem.</p>
+
+  <!-- HEADER -->
+  <div class="dash-header">
+    <div>
+      <h1>Hiring Dashboard</h1>
+      <p id="sub">Loading your hiring overview…</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div class="rec-pill" id="pill" style="display:none;">
+        <div class="rec-avatar" id="av">R</div>
+        <div>
+          <div class="rec-pill-name" id="pname">—</div>
+          <div class="rec-pill-org"  id="porg">—</div>
+        </div>
+      </div>
+      <button class="rbtn" id="rbtn" onclick="boot()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
   </div>
 
-  <section class="powerbi-full">
-    <iframe
-      src="https://app.powerbi.com/view?r=eyJrIjoiMmFhYjAyZjgtODFlNy00Zjk1LTk0NDMtYWQ5MDgwZDZjM2U0IiwidCI6IjljMTg1NzE0LWYwYWYtNDgyNi1iZDRiLTdiOTg3ZjZkZDkyMSJ9"
-      allowfullscreen>
-    </iframe>
-  </section>
+  <!-- KPI STRIP -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <span class="kpi-icon">📋</span>
+      <div class="kpi-lbl">Your Job Listings</div>
+      <div class="kpi-val" id="kJobs"><div class="shim" style="height:26px;width:40px;"></div></div>
+      <div class="kpi-sub" id="kJobsSub">active postings</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">👥</span>
+      <div class="kpi-lbl">Candidates Screened</div>
+      <div class="kpi-val" id="kCands"><div class="shim" style="height:26px;width:40px;"></div></div>
+      <div class="kpi-sub" id="kCandsSub">across all your jobs</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">🎯</span>
+      <div class="kpi-lbl">Avg Match Score</div>
+      <div class="kpi-val" id="kAvg"><div class="shim" style="height:26px;width:55px;"></div></div>
+      <div class="kpi-sub" id="kAvgSub">candidate pool quality</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">⭐</span>
+      <div class="kpi-lbl">Strong Candidates</div>
+      <div class="kpi-val" id="kStrong"><div class="shim" style="height:26px;width:40px;"></div></div>
+      <div id="kStrongBadge"></div>
+      <div class="kpi-sub" style="font-size:10px;opacity:.6;margin-top:2px;">match score ≥70%</div>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-icon">🌍</span>
+      <div class="kpi-lbl">Locations Covered</div>
+      <div class="kpi-val" id="kLocs"><div class="shim" style="height:26px;width:40px;"></div></div>
+      <div class="kpi-sub">unique job locations</div>
+    </div>
+  </div>
+
+  <!-- ROW 1: Candidates per job | Funnel | Level mix -->
+  <div class="g3">
+    <div class="dc">
+      <div><div class="ct">Candidates per Job</div><div class="cs" id="cPerJobSub">matches found per posting</div></div>
+      <div class="cw"><canvas id="cPerJob"></canvas></div>
+    </div>
+    <div class="dc">
+      <div><div class="ct">Match Quality Funnel</div><div class="cs">all candidates by score band</div></div>
+      <div id="funnel" style="display:flex;flex-direction:column;gap:10px;flex:1;justify-content:center;margin-top:4px;">
+        <div class="shim" style="height:22px;border-radius:5px;"></div>
+        <div class="shim" style="height:22px;border-radius:5px;width:80%;"></div>
+        <div class="shim" style="height:22px;border-radius:5px;width:60%;"></div>
+        <div class="shim" style="height:22px;border-radius:5px;width:35%;"></div>
+      </div>
+    </div>
+    <div class="dc">
+      <div><div class="ct">Candidate Level Mix</div><div class="cs">junior · experienced · senior</div></div>
+      <div class="cw"><canvas id="cLevel"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Top candidates | Skill gaps + demanded skills -->
+  <div class="g2">
+    <div class="dc" style="gap:14px;">
+      <div><div class="ct" style="margin-bottom:2px;">Top Matched Candidates</div>
+        <div class="cs">highest scoring across all your postings</div></div>
+      <div id="topCandsList">
+        <div class="shim" style="height:40px;border-radius:8px;margin-bottom:8px;"></div>
+        <div class="shim" style="height:40px;border-radius:8px;margin-bottom:8px;"></div>
+        <div class="shim" style="height:40px;border-radius:8px;margin-bottom:8px;"></div>
+        <div class="shim" style="height:40px;border-radius:8px;"></div>
+      </div>
+    </div>
+    <div class="dc" style="gap:14px;">
+      <div><div class="ct" style="margin-bottom:2px;">Common Skill Gaps</div>
+        <div class="cs">skills candidates most often lack for your jobs</div></div>
+      <div id="skillGaps">
+        <div class="shim" style="height:13px;border-radius:4px;margin-bottom:10px;"></div>
+        <div class="shim" style="height:13px;border-radius:4px;margin-bottom:10px;width:80%;"></div>
+        <div class="shim" style="height:13px;border-radius:4px;width:60%;"></div>
+      </div>
+      <div class="divider"></div>
+      <div><div class="ct" style="margin-bottom:8px;">Skills Your Jobs Demand</div>
+        <div id="demandedSkills" style="display:flex;flex-wrap:wrap;gap:6px;">
+          <div class="shim" style="height:24px;width:55px;border-radius:20px;"></div>
+          <div class="shim" style="height:24px;width:70px;border-radius:20px;"></div>
+          <div class="shim" style="height:24px;width:50px;border-radius:20px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JOB TABLE -->
+  <div class="dc">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="ct">Your Job Postings</div>
+        <div class="cs" id="tblSub">jobs posted by your organisation</div>
+      </div>
+      <a href="rec-jobs.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600;opacity:.85;">Manage jobs →</a>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Job Title</th><th>Location</th><th>Candidates</th>
+          <th>Top Score</th><th>Common Skills</th><th>Avg Score</th><th></th>
+        </tr></thead>
+        <tbody id="tblBody">
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;margin-bottom:6px;"></div></td></tr>
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;margin-bottom:6px;"></div></td></tr>
+          <tr><td colspan="7"><div class="shim" style="height:34px;border-radius:6px;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </main>
+
+<script>
+const API = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
+let CH = {};
+Chart.defaults.color = "#6b7fa8";
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11.5;
+const PAL = ["rgba(122,162,255,.8)","rgba(74,222,128,.78)","rgba(167,139,250,.78)","rgba(251,191,36,.78)","rgba(248,113,113,.78)","rgba(56,189,248,.78)"];
+
+function bar(p){const e=document.getElementById("lbar");e.style.width=p+"%";if(p>=100)setTimeout(()=>e.style.width="0",600);}
+const $=id=>document.getElementById(id);
+const st=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+const ucW=s=>(s||"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+
+async function apiFetch(path){
+  const r=await fetch(API+path,{headers:{"Content-Type":"application/json"}});
+  if(!r.ok)throw new Error(`HTTP ${r.status}`);
+  const txt=await r.text();if(!txt)return{};
+  const d=JSON.parse(txt);
+  if(d.statusCode&&typeof d.body==="string"){try{return JSON.parse(d.body);}catch{return{};}}
+  return d;
+}
+
+async function resolveRecruiter(){
+  if(!window.auth?.currentUser||!window.db)return null;
+  try{
+    const{getDoc,doc}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const snap=await getDoc(doc(window.db,"users",window.auth.currentUser.uid));
+    if(!snap.exists())return null;
+    const d=snap.data();
+    return{uid:window.auth.currentUser.uid,email:d.email||"",org:d.organisation_name||"",name:d.name||d.email?.split("@")[0]||"Recruiter"};
+  }catch(e){console.warn(e);return null;}
+}
+
+function showPill(r){
+  $("av").textContent=(r.org||r.name||"R").charAt(0).toUpperCase();
+  $("pname").textContent=r.name;
+  $("porg").textContent=r.org||"Your Organisation";
+  $("pill").style.display="flex";
+}
+
+function renderKPIs(jobs,md){
+  const allM=md.flatMap(d=>d.matches);
+  const scores=allM.map(m=>m.match_percent).filter(Boolean);
+  const avg=scores.length?+(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1):0;
+  const strong=scores.filter(s=>s>=70).length;
+  const locs=new Set(jobs.map(j=>j.location_display||j.city||j.country).filter(Boolean)).size;
+  st("kJobs",jobs.length||"—"); st("kCands",allM.length||"—");
+  st("kAvg",avg?`${avg}%`:"—"); st("kStrong",strong||"—"); st("kLocs",locs||"—");
+  st("kJobsSub",`${jobs.length} active posting${jobs.length!==1?"s":""}`);
+  st("kCandsSub",`across ${jobs.length} job${jobs.length!==1?"s":""}`);
+  st("kAvgSub",avg>=75?"🟢 Excellent pool":avg>=65?"🟡 Good pool":avg?"🟠 Moderate":"—");
+  const badge=$("kStrongBadge");
+  if(badge&&scores.length){
+    const pct=Math.round((strong/scores.length)*100);
+    const col=pct>=60?"green":pct>=40?"blue":"amber";
+    badge.innerHTML=`<div class="kpi-badge ${col}">${pct}% of candidates</div>`;
+  }
+}
+
+function renderPerJob(md){
+  // Only show jobs that actually have candidates — zeros add no info
+  const withCands = md.filter(d=>d.matches.length>0).slice(0,8);
+  const zeroCt = md.filter(d=>d.matches.length===0).length;
+  const sub = withCands.length
+    ? `${withCands.length} job${withCands.length!==1?"s":""} with candidates${zeroCt?` · ${zeroCt} awaiting`:""}` 
+    : "No candidate matches yet";
+  st("cPerJobSub", sub);
+
+  const ctx=$("cPerJob");if(!ctx)return;
+
+  if(!withCands.length){
+    ctx.parentElement.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:160px;gap:8px;color:var(--text-3);font-size:13px;">
+      <span style="font-size:22px;opacity:.3;">📋</span>
+      No candidate matches found yet across your job postings.
+    </div>`;
+    return;
+  }
+
+  const labels=withCands.map(d=>{
+    const t=(d.job.title||"Job").split(" ").slice(0,3).join(" ");
+    // Add location to disambiguate duplicate titles
+    const loc=d.job.city?` · ${d.job.city}`:"";
+    const full=t+loc;
+    return full.length>22?full.slice(0,20)+"…":full;
+  });
+  const data=withCands.map(d=>d.matches.length);
+
+  if(CH.pj)CH.pj.destroy();
+  CH.pj=new Chart(ctx,{
+    type:"bar",
+    data:{labels,datasets:[{label:"Candidates",data,backgroundColor:withCands.map((_,i)=>PAL[i%PAL.length]),borderRadius:5,borderSkipped:false}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`  ${c.parsed.x} candidates`}}},
+      scales:{
+        x:{grid:{color:"rgba(255,255,255,.04)"},ticks:{color:"#6b7fa8",precision:0,stepSize:1,callback:v=>Number.isInteger(v)?v:""},border:{display:false}},
+        y:{grid:{display:false},ticks:{color:"#b0bcd8",font:{size:10.5}},border:{display:false}}
+      }
+    }
+  });
+}
+
+function renderFunnel(md){
+  const allM=md.flatMap(d=>d.matches);
+  const total=allM.length;
+  const el=$("funnel");if(!el)return;
+  if(!total){
+    el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:140px;gap:8px;color:var(--text-3);font-size:12px;text-align:center;">
+      <span style="font-size:22px;opacity:.3;">📊</span>No candidates to show funnel for yet.
+    </div>`;
+    return;
+  }
+
+  const bands=[
+    {label:"≥80%  Excellent",count:allM.filter(m=>m.match_percent>=80).length,color:"rgba(74,222,128,.75)"},
+    {label:"70–79%  Strong", count:allM.filter(m=>m.match_percent>=70&&m.match_percent<80).length,color:"rgba(122,162,255,.75)"},
+    {label:"60–69%  Good",   count:allM.filter(m=>m.match_percent>=60&&m.match_percent<70).length,color:"rgba(251,191,36,.7)"},
+    {label:"<60%  Weak",     count:allM.filter(m=>m.match_percent<60).length,color:"rgba(248,113,113,.6)"}
+  ];
+  // Always show all 4 bands (even 0), so the funnel shape is clear
+  const maxC=Math.max(...bands.map(b=>b.count),1);
+
+  // Insight summary
+  const topBand=bands.find(b=>b.count===Math.max(...bands.map(b=>b.count)));
+  const strongPct=Math.round(((bands[0].count+bands[1].count)/total)*100);
+
+  el.innerHTML = bands.map(b=>`
+    <div class="funnel-row">
+      <div class="funnel-lbl">${b.label}</div>
+      <div class="funnel-bg">
+        ${b.count>0
+          ? `<div class="funnel-fill" data-w="${Math.round((b.count/maxC)*100)}" style="background:${b.color};">${b.count}</div>`
+          : `<div style="height:100%;display:flex;align-items:center;padding-left:10px;font-size:10.5px;color:rgba(255,255,255,.2);">0 candidates</div>`
+        }
+      </div>
+      <div class="funnel-pct">${b.count>0?Math.round((b.count/total)*100)+"%":"—"}</div>
+    </div>`).join("")
+  + `<div style="margin-top:8px;padding:8px 10px;background:rgba(122,162,255,0.05);border-radius:8px;border:1px solid rgba(122,162,255,0.1);font-size:11px;color:var(--text-3);line-height:1.5;">
+      💡 <strong style="color:var(--text-2);">${strongPct}%</strong> of candidates score ≥70%.
+      ${strongPct>=70?"Pool quality is strong.":strongPct>=40?"Pool quality is moderate — consider broader sourcing.":"Consider expanding job reach to attract stronger candidates."}
+    </div>`;
+
+  requestAnimationFrame(()=>{document.querySelectorAll(".funnel-fill[data-w]").forEach(f=>f.style.width=f.dataset.w+"%");});
+}
+
+function renderLevel(md){
+  const allM=md.flatMap(d=>d.matches);
+  const lv={};
+  allM.forEach(m=>{const l=(m.level||"Unknown");const lbl=l.charAt(0).toUpperCase()+l.slice(1);lv[lbl]=(lv[lbl]||0)+1;});
+  const cols={Junior:"rgba(122,162,255,.8)",Experienced:"rgba(74,222,128,.8)",Senior:"rgba(167,139,250,.8)",Unknown:"rgba(107,127,168,.3)"};
+  const labels=Object.keys(lv);const data=labels.map(k=>lv[k]);
+  const ctx=$("cLevel");if(!ctx)return;
+  if(labels.length===1&&labels[0]==="Unknown"){ctx.parentElement.innerHTML=`<div class="empty" style="padding:16px;"><span class="ei">📊</span>Level data N/A for this direction</div>`;return;}
+  if(CH.lv)CH.lv.destroy();
+  CH.lv=new Chart(ctx,{
+    type:"doughnut",
+    data:{labels,datasets:[{data,backgroundColor:labels.map(l=>cols[l]||PAL[0]),borderColor:"#131726",borderWidth:3,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"62%",
+      plugins:{legend:{position:"bottom",labels:{padding:10,boxWidth:9,boxHeight:9,borderRadius:3,useBorderRadius:true}},
+        tooltip:{callbacks:{label:c=>`  ${c.parsed} candidates (${c.label})`}}}}
+  });
+}
+
+function renderTopCands(md){
+  const el=$("topCandsList");if(!el)return;
+  const map={};
+  md.forEach(d=>d.matches.forEach(m=>{const cid=m.candidate_id;if(!map[cid]||m.match_percent>map[cid].match_percent)map[cid]={...m,jobTitle:d.job.title};}));
+  const top=Object.values(map).sort((a,b)=>b.match_percent-a.match_percent).slice(0,6);
+  if(!top.length){el.innerHTML=`<div class="empty"><span class="ei">👥</span>No candidates yet</div>`;return;}
+  el.innerHTML=top.map(m=>{
+    const pct=Math.round(m.match_percent||0);
+    const col=pct>=80?"var(--green)":pct>=70?"var(--blue)":"var(--amber)";
+    const name=m.name||"Candidate";
+    const ini=name.trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+    const skills=(m.matched_skills||[]).slice(0,2).map(s=>ucW(s)).join(", ");
+    return`<div class="cand-row">
+      <div class="cand-ini">${ini}</div>
+      <div class="cand-info">
+        <div class="cand-nm">${name}</div>
+        <div class="cand-dt">${m.jobTitle||"—"}${skills?" · "+skills:""}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:${col};flex-shrink:0;">${pct}%</div>
+    </div>`;
+  }).join("");
+}
+
+function renderSkillGaps(md){
+  const el=$("skillGaps");if(!el)return;
+  const gc={};
+  md.forEach(d=>d.matches.forEach(m=>(m.missing_skills||[]).forEach(s=>{gc[s]=(gc[s]||0)+1;})));
+  const sorted=Object.entries(gc).sort((a,b)=>b[1]-a[1]).slice(0,7);
+
+  if(!sorted.length){
+    el.innerHTML=`<div style="padding:10px 0;color:var(--green);font-size:12.5px;font-weight:500;">
+      ✅ No common skill gaps — your candidates are well-matched to your job requirements.
+    </div>`;
+    return;
+  }
+
+  const maxC=sorted[0][1];
+  const totalCands=new Set(md.flatMap(d=>d.matches.map(m=>m.candidate_id))).size;
+
+  el.innerHTML=sorted.map(([s,c])=>`
+    <div class="gap-row-r">
+      <span class="gap-sn" title="${ucW(s)}">${ucW(s)}</span>
+      <div class="gap-bb"><div class="gap-bf" data-w="${Math.round((c/maxC)*100)}"></div></div>
+      <span class="gap-ct">${c} / ${totalCands}</span>
+    </div>`).join("")
+  // Actionable tip based on biggest gap
+  + `<div style="margin-top:10px;padding:8px 10px;background:rgba(251,191,36,0.05);border-radius:8px;border:1px solid rgba(251,191,36,0.12);font-size:11px;color:var(--text-3);line-height:1.5;">
+      △ Top gap: <strong style="color:var(--amber);">${ucW(sorted[0][0])}</strong> — 
+      ${sorted[0][1]} of your candidates are missing it. Consider adding it to screening criteria or sourcing candidates with this skill.
+    </div>`;
+
+  requestAnimationFrame(()=>{document.querySelectorAll(".gap-bf[data-w]").forEach(b=>b.style.width=b.dataset.w+"%");});
+}
+
+function renderDemandedSkills(md){
+  const el=$("demandedSkills");if(!el)return;
+  const sc={};
+  md.forEach(d=>d.matches.forEach(m=>(m.matched_skills||[]).forEach(s=>{sc[s]=(sc[s]||0)+1;})));
+  const sorted=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,14);
+
+  if(!sorted.length){
+    el.innerHTML=`<span style="color:var(--text-3);font-size:12px;">No skill data from matched candidates</span>`;
+    return;
+  }
+
+  const maxC=sorted[0][1];
+  el.innerHTML=sorted.map(([s,c])=>{
+    const r=c/maxC;
+    const fs=r>.65?"14px":r>.35?"12px":"11px";
+    const opacity=r>.4?1:0.7;
+    return`<span class="sk-chip d" style="font-size:${fs};opacity:${opacity};" title="${c} candidates have this">${ucW(s)}</span>`;
+  }).join("");
+
+  // Below the chips: a mini stat row showing jobs with/without matches
+  const withM=md.filter(d=>d.matches.length>0).length;
+  const withoutM=md.filter(d=>d.matches.length===0).length;
+  const parent=el.parentElement;
+  // Remove old stat row if exists
+  parent.querySelector(".job-stat-row")?.remove();
+
+  if(withoutM>0){
+    const statRow=document.createElement("div");
+    statRow.className="job-stat-row";
+    statRow.style.cssText="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;";
+    statRow.innerHTML=[
+      {icon:"✅",label:"Jobs with candidates",val:withM,col:"var(--green)"},
+      {icon:"⏳",label:"Jobs awaiting matches",val:withoutM,col:"var(--amber)"},
+    ].map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(255,255,255,0.025);border-radius:7px;border:1px solid rgba(255,255,255,0.05);">
+      <span style="font-size:11px;">${s.icon}</span>
+      <span style="font-size:11px;font-weight:700;color:${s.col};">${s.val}</span>
+      <span style="font-size:10.5px;color:var(--text-3);">${s.label}</span>
+    </div>`).join("");
+    parent.appendChild(statRow);
+  }
+}
+
+function renderTable(md,org){
+  const el=$("tblBody");if(!el)return;
+  // Sort: jobs with candidates first, then by candidate count desc
+  const sorted=[...md].sort((a,b)=>b.matches.length-a.matches.length);
+  st("tblSub",`${sorted.length} job${sorted.length!==1?"s":""} · ${org}`);
+  if(!sorted.length){el.innerHTML=`<tr><td colspan="7"><div class="empty"><span class="ei">📋</span>No jobs found for your organisation.</div></td></tr>`;return;}
+
+  el.innerHTML=sorted.map(d=>{
+    const job=d.job;const matches=d.matches;
+    const hasM=matches.length>0;
+    const scores=matches.map(m=>m.match_percent).filter(Boolean);
+    const avg=scores.length?+(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1):null;
+    const top=scores.length?Math.max(...scores):null;
+    const avgCls=avg?(avg>=75?"hi":avg>=65?"md":"lo"):"";
+    const loc=job.location_display||job.city||(job.country||"—");
+    const sc={};matches.forEach(m=>(m.matched_skills||[]).forEach(s=>{sc[s]=(sc[s]||0)+1;}));
+    const topSkills=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,3)
+      .map(([s])=>`<span class="sk-chip m" style="font-size:10px;">${ucW(s)}</span>`).join(" ");
+
+    return`<tr style="${!hasM?"opacity:.6;":""}" title="${!hasM?"No candidates matched this job yet":""}">
+      <td class="ttl">${job.title||"—"}</td>
+      <td style="font-size:11.5px;color:var(--text-3);">${loc}</td>
+      <td style="color:${hasM?"var(--text-2)":"var(--text-3)"};">${hasM?matches.length:`<span style="font-size:11px;">Awaiting</span>`}</td>
+      <td>${top?`<span class="mb hi">${Math.round(top)}%</span>`:`<span style="font-size:11px;color:var(--text-3);">—</span>`}</td>
+      <td>${topSkills||`<span style="font-size:11px;color:var(--text-3);">—</span>`}</td>
+      <td>${avg?`<span class="mb ${avgCls}">${avg}%</span>`:`<span style="font-size:11px;color:var(--text-3);">—</span>`}</td>
+      <td><a href="cand-matches.html" class="vcbtn" style="${!hasM?"opacity:.5;pointer-events:none;":""}">
+        ${hasM?"View Candidates":"No Matches"}
+      </a></td>
+    </tr>`;
+  }).join("");
+}
+
+async function boot(){
+  const btn=$("rbtn");btn?.classList.add("spin");bar(10);
+  try{
+    const rec=await resolveRecruiter();bar(20);
+    if(!rec){st("sub","Please log in.");bar(100);btn?.classList.remove("spin");return;}
+    showPill(rec);
+    if(!rec.org){st("sub","No organisation linked. Contact support.");bar(100);btn?.classList.remove("spin");return;}
+    st("sub",`Hiring overview for ${rec.org}`);
+
+    const jobsRes=await apiFetch(`/jobs?company=${encodeURIComponent(rec.org)}`).catch(()=>({}));bar(40);
+    const jobs=jobsRes.jobs||[];
+    if(!jobs.length){st("sub",`No jobs found for "${rec.org}"`);["kJobs","kCands","kAvg","kStrong","kLocs"].forEach(id=>st(id,"0"));bar(100);btn?.classList.remove("spin");return;}
+
+    // Fetch matches for up to 6 jobs in parallel
+    const toFetch=jobs.slice(0,6);
+    const md=await Promise.all(toFetch.map(job=>
+      apiFetch(`/matches?job_id=${job.job_id}&top_n=50&offset=0`)
+        .then(res=>{
+          const m=Array.isArray(res.matches)?res.matches:(typeof res.body==="string"?JSON.parse(res.body).matches||[]:res.matches||[]);
+          return{job,matches:m};
+        })
+        .catch(()=>({job,matches:[]}))
+    ));bar(75);
+
+    renderKPIs(jobs,md);
+    renderPerJob(md);
+    renderFunnel(md);
+    renderLevel(md);
+    renderTopCands(md);
+    renderSkillGaps(md);
+    renderDemandedSkills(md);
+    renderTable(md,rec.org);
+    bar(100);
+  }catch(err){
+    console.error(err);st("sub","Failed to load — please refresh.");bar(100);
+  }
+  btn?.classList.remove("spin");
+}
+
+(function init(){
+  let n=0;
+  const t=setInterval(()=>{
+    n++;
+    if(window.auth!==undefined&&window.db!==undefined){
+      clearInterval(t);
+      if(typeof window.auth.onAuthStateChanged==="function")
+        window.auth.onAuthStateChanged(u=>{if(u)boot();});
+      else boot();
+    }
+    if(n>50){clearInterval(t);bar(100);}
+  },100);
+})();
+</script>
 
 <script type="module" src="auth.js"></script>
 <script type="module" src="api.js"></script>

@@ -238,8 +238,10 @@ function updateAuthUI() {
     link.innerText  = "Sign Up";
     btn.innerText   = "Login";
 
-    if (roleSelect)  roleSelect.style.display  = "none";
-    if (resumeWrap)  resumeWrap.style.display   = "none";
+    if (roleSelect)  roleSelect.style.display   = "none";
+    if (resumeWrap)  resumeWrap.style.display    = "none";
+    const adminKeyWrapLogin = document.getElementById("adminKeyWrap");
+    if (adminKeyWrapLogin) { adminKeyWrapLogin.style.display = "none"; document.getElementById("adminKeyInput") && (document.getElementById("adminKeyInput").value = ""); }
 
   } else {
     title.innerText = "Sign Up";
@@ -355,6 +357,54 @@ if (authMode === "signup" && role === "candidate") {
     if (authMode === "signup" && role === "recruiter" && !orgName) {
       showMessage("Please enter organisation name.");
       return;
+    }
+
+    /* ── ADMIN KEY VERIFICATION ── */
+    const adminKey = document.getElementById("adminKeyInput")?.value.trim();
+    if (authMode === "signup" && role === "admin") {
+      if (!adminKey) {
+        showMessage("Please enter the authorization key for admin access.");
+        return;
+      }
+      // Verify admin key — supports both:
+      //   1. crypto.subtle SHA-256 hash comparison (HTTPS / localhost)
+      //   2. Plaintext key stored in Firestore as "key" field (HTTP fallback)
+      try {
+        const configSnap = await getDoc(doc(db, "config", "adminKey"));
+        if (!configSnap.exists()) {
+          showMessage("Admin access is not configured. Contact your system administrator.");
+          return;
+        }
+        const configData = configSnap.data();
+
+        let verified = false;
+
+        // Method 1: plaintext "key" field (works on HTTP)
+        if (configData?.key) {
+          verified = adminKey === configData.key;
+        }
+
+        // Method 2: SHA-256 hash field (works on HTTPS / localhost with crypto.subtle)
+        if (!verified && configData?.hash) {
+          try {
+            const encoder = new TextEncoder();
+            const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(adminKey));
+            const hashHex = Array.from(new Uint8Array(hashBuffer))
+              .map(b => b.toString(16).padStart(2, "0")).join("");
+            verified = hashHex === configData.hash;
+          } catch (cryptoErr) {
+            // crypto.subtle unavailable (HTTP) — hash check skipped
+          }
+        }
+
+        if (!verified) {
+          showMessage("Invalid authorization key. Access denied.");
+          return;
+        }
+      } catch (keyErr) {
+        showMessage("Could not verify authorization key. Please try again.");
+        return;
+      }
     }
 
     btn.disabled = true;
@@ -537,16 +587,17 @@ if (role === "candidate") {
    Shows org field for recruiter, resume upload for candidate
 ========================================================= */
 document.getElementById("roleSelect")?.addEventListener("change", (e) => {
-  const orgInput   = document.getElementById("orgNameInput");
-  const resumeWrap = document.getElementById("resumeUploadWrap");
+  const orgInput    = document.getElementById("orgNameInput");
+  const resumeWrap  = document.getElementById("resumeUploadWrap");
+  const adminKeyWrap = document.getElementById("adminKeyWrap");
 
-  /* org field */
+  /* org field — recruiters only */
   if (orgInput) {
     orgInput.style.display = e.target.value === "recruiter" ? "block" : "none";
     if (e.target.value !== "recruiter") orgInput.value = "";
   }
 
-  /* resume upload (candidates only) */
+  /* resume upload — candidates only */
   if (resumeWrap) {
     resumeWrap.style.display = e.target.value === "candidate" ? "block" : "none";
     if (e.target.value !== "candidate") {
@@ -555,6 +606,15 @@ document.getElementById("roleSelect")?.addEventListener("change", (e) => {
       const rs = document.getElementById("authResumeStatus");
       if (fi) fi.value = "";
       if (rs) rs.textContent = "";
+    }
+  }
+
+  /* authorization key — admins only */
+  if (adminKeyWrap) {
+    adminKeyWrap.style.display = e.target.value === "admin" ? "block" : "none";
+    if (e.target.value !== "admin") {
+      const ki = document.getElementById("adminKeyInput");
+      if (ki) ki.value = "";
     }
   }
 });
