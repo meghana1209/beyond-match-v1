@@ -48,10 +48,22 @@ function resolveCountryLabel(jobs) {
 /* ── Matched job IDs set (populated after /matches call) ────────────────── */
 let _matchedJobIds = new Set();
 
-/* Fetch matched job IDs for the current user's latest candidate */
+/* Fetch matched job IDs for the current user's latest candidate.
+   First checks sessionStorage (written by jobmatches.html) for instant sync,
+   then falls back to a fresh API call — always fetches top_n=50 to stay
+   consistent with the Job Matches page. */
 async function loadMatchedJobIds() {
   try {
-    // Wait for apiFetch to be available
+    // ── 1. Fast path: Job Matches page stores IDs in sessionStorage ──
+    const cached = sessionStorage.getItem("bm_matched_job_ids");
+    if (cached) {
+      try {
+        _matchedJobIds = new Set(JSON.parse(cached));
+        return; // marker colours will be refreshed by caller
+      } catch {}
+    }
+
+    // ── 2. Slow path: resolve candidate ID then call API ──
     let attempts = 0;
     while (!window.apiFetch && attempts < 30) {
       await new Promise(r => setTimeout(r, 100));
@@ -59,8 +71,6 @@ async function loadMatchedJobIds() {
     }
     if (!window.apiFetch) return;
 
-    // Try to get candidate_id from the select (populated by candidate.js)
-    // or from Firestore via window.auth
     let candidateId = null;
 
     // Poll briefly for the select element (candidate.js populates it async)
@@ -81,6 +91,7 @@ async function loadMatchedJobIds() {
 
     if (!candidateId) return;
 
+    // top_n=50 — MUST match the value used in jobmatches.html so the two pages agree
     const res = await window.apiFetch(`/matches?candidate_id=${candidateId}&top_n=50&offset=0`);
     let data = res;
     if (typeof res?.body === "string") {
@@ -89,8 +100,9 @@ async function loadMatchedJobIds() {
     const matches = Array.isArray(data) ? data : (data?.matches || []);
     _matchedJobIds = new Set(matches.map(m => String(m.job_id)));
 
-    // Re-style existing markers now that we know which are matched
-    _refreshMarkerStyles();
+    // Cache for any future navigation back to this page within the tab
+    try { sessionStorage.setItem("bm_matched_job_ids", JSON.stringify([..._matchedJobIds])); } catch {}
+
   } catch (e) {
     console.warn("LocateHire: could not load matched job IDs", e);
   }
@@ -326,6 +338,9 @@ async function loadJobsAndMarkers() {
   }
   if (!window.apiFetch) return;
 
+  // Kick off match loading immediately in parallel — don't wait for jobs
+  const matchPromise = loadMatchedJobIds();
+
   const res = await window.apiFetch("/jobs");
   let jobs = [];
   if (Array.isArray(res))            jobs = res;
@@ -361,16 +376,20 @@ async function loadJobsAndMarkers() {
     if (coords) { loc.lat = coords.lat; loc.lng = coords.lng; }
   }
 
-  // Render already-resolved markers
+  // Render already-resolved markers immediately
   [
     ...Object.values(locationMap).filter(l => !l.needsGeocode),
     ...cacheHits.filter(l => l.lat && l.lng)
   ].forEach(loc => _makeMarker(loc).addTo(markersLayer));
 
-  // Geocode unknowns progressively
-  let cacheUpdated = false;
-  for (let i = 0; i < cacheMiss.length; i++) {
-    const loc    = cacheMiss[i];
+  // Geocode cache misses with concurrency limit of 3 (Nominatim allows ~1 req/s per IP,
+  // but batching 3 with 350ms stagger is safe and ~3× faster than fully sequential)
+  const CONCURRENCY = 3;
+  const STAGGER_MS  = 350;
+  let cacheUpdated  = false;
+
+  async function geocodeOne(loc, delayMs) {
+    if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
     const key    = loc.locStr.toLowerCase();
     const coords = await nominatim(loc.locStr);
     geoCache[key] = coords;
@@ -380,12 +399,21 @@ async function loadJobsAndMarkers() {
       loc.lng = coords.lng;
       _makeMarker(loc).addTo(markersLayer);
     }
-    if (i < cacheMiss.length - 1) await new Promise(r => setTimeout(r, 1100));
   }
+
+  // Process in batches of CONCURRENCY, each item staggered within the batch
+  for (let i = 0; i < cacheMiss.length; i += CONCURRENCY) {
+    const batch = cacheMiss.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map((loc, bi) => geocodeOne(loc, bi * STAGGER_MS)));
+    // Gap between batches to stay well within Nominatim rate limit
+    if (i + CONCURRENCY < cacheMiss.length) await new Promise(r => setTimeout(r, 1000));
+  }
+
   if (cacheUpdated) saveGeoCache(geoCache);
 
-  // Kick off match loading in parallel (doesn't block map rendering)
-  loadMatchedJobIds().then(() => _refreshMarkerStyles());
+  // Wait for matches then refresh marker colours
+  await matchPromise;
+  _refreshMarkerStyles();
 }
 
 /* ── Right panel ─────────────────────────────────────────────────────────── */

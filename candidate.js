@@ -426,8 +426,9 @@ async function loadCandidateJobMatches() {
   }
 
   /* ── Fetch matches AND jobs in parallel — cuts load time ~50% ── */
+  // top_n=50 — MUST match the value used in locatehire.js so both pages highlight the same jobs
   const [res, jobsRes] = await Promise.all([
-    apiFetch(`/matches?candidate_id=${resolvedId}&top_n=5&offset=0`),
+    apiFetch(`/matches?candidate_id=${resolvedId}&top_n=50&offset=0`),
     apiFetch("/jobs")
   ]);
 
@@ -450,6 +451,12 @@ async function loadCandidateJobMatches() {
     `;
     return;
   }
+
+  // Cache matched job IDs in sessionStorage so LocateHire reads the same set
+  // without a second API call — keeps both pages perfectly in sync
+  try {
+    sessionStorage.setItem("bm_matched_job_ids", JSON.stringify(matches.map(m => String(m.job_id))));
+  } catch {}
 
   let allJobs = Array.isArray(jobsRes)
     ? jobsRes
