@@ -399,27 +399,46 @@ function renderLevel(md){
 
 function renderTopCands(md){
   const el=$("topCandsList");if(!el)return;
+
+  // Aggregate per candidate: best score + per-job breakdown for multi-line display
   const map={};
-  md.forEach(d=>d.matches.forEach(m=>{const cid=m.candidate_id;if(!map[cid]||m.match_percent>map[cid].match_percent)map[cid]={...m,jobTitle:d.job.title};}));
-  const top=Object.values(map).sort((a,b)=>b.match_percent-a.match_percent).slice(0,6);
+  md.forEach(d=>d.matches.forEach(m=>{
+    const cid=m.candidate_id;
+    if(!map[cid]){
+      map[cid]={name:m.name,candidate_id:cid,bestScore:m.match_percent||0,jobs:[]};
+    } else if((m.match_percent||0)>map[cid].bestScore){
+      map[cid].bestScore=m.match_percent;
+    }
+    map[cid].jobs.push({title:d.job.title||"—",skills:(m.matched_skills||[]).slice(0,3)});
+  }));
+
+  const top=Object.values(map).sort((a,b)=>b.bestScore-a.bestScore).slice(0,6);
   if(!top.length){el.innerHTML=`<div class="empty"><span class="ei">👥</span>No candidates yet</div>`;return;}
+
   el.innerHTML=top.map(m=>{
-    const pct=Math.round(m.match_percent||0);
+    const pct=Math.round(m.bestScore||0);
     const col=pct>=80?"var(--green)":pct>=70?"var(--blue)":"var(--amber)";
     const name=m.name||"Candidate";
     const ini=name.trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
-    const skills=(m.matched_skills||[]).slice(0,2).map(s=>ucW(s)).join(", ");
-    return`<div class="cand-row">
-      <div class="cand-ini">${ini}</div>
-      <div class="cand-info">
-        <div class="cand-nm">${name}</div>
-        <div class="cand-dt">${m.jobTitle||"—"}${skills?" · "+skills:""}</div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:${col};flex-shrink:0;">${pct}%</div>
-    </div>`;
+    // One line per job: "Job Title · Skill1, Skill2, Skill3"
+    const jobLines=m.jobs.map(j=>{
+      const t=j.title.split(" ").slice(0,3).join(" ");
+      const sk=j.skills.map(s=>ucW(s)).join(", ");
+      return`<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.6;">`
+        +`<span style="color:var(--text-2);font-weight:500;">${t}</span>`
+        +(sk?` <span style="opacity:.75;">· ${sk}</span>`:"")
+        +`</div>`;
+    }).join("");
+    return`<div class="cand-row" style="align-items:flex-start;">`
+      +`<div class="cand-ini" style="margin-top:3px;">${ini}</div>`
+      +`<div class="cand-info" style="min-width:0;">`
+        +`<div class="cand-nm" style="margin-bottom:2px;">${name}</div>`
+        +jobLines
+      +`</div>`
+      +`<div style="font-size:12px;font-weight:700;color:${col};flex-shrink:0;padding-top:3px;">${pct}%</div>`
+    +`</div>`;
   }).join("");
 }
-
 function renderSkillGaps(md){
   const el=$("skillGaps");if(!el)return;
   const gc={};

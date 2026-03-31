@@ -582,29 +582,35 @@ const _jobsByCompanyCache = {};
 async function fetchOrgJobs(companyName) {
   const cacheKey = normaliseCompany(companyName);
   if (_jobsByCompanyCache[cacheKey]) {
-    
     return _jobsByCompanyCache[cacheKey];
   }
 
+  // Try company-filtered endpoint first
   const res = await apiFetch(`/jobs?company=${encodeURIComponent(companyName)}`);
-  const jobs = res.jobs || [];
 
-  
+  // Handle all response shapes the Lambda might return
+  let jobs = res.jobs || res.matches || normalizeApiResponse(res);
+
+  // Fallback: if endpoint doesn't support ?company= filtering, fetch all and filter client-side
+  if (!jobs.length) {
+    const allRes = await apiFetch(`/jobs`);
+    const allJobs = allRes.jobs || normalizeApiResponse(allRes);
+    const normTarget = normaliseCompany(companyName);
+    jobs = allJobs.filter(j => normaliseCompany(j.company) === normTarget);
+  }
+
   _jobsByCompanyCache[cacheKey] = jobs;
   return jobs;
 }
 
 async function loadRecruiterJobs() {
-  const tableEl = document.getElementById("jobsTable");
-  if (tableEl) tableEl.innerHTML = `<p style="color:#aaa;padding:16px">Loading jobs for your organisation…</p>`;
-
-  orgJobs = await fetchOrgJobs(recruiterOrg);
-
-  // For "All Jobs" toggle: single page of unfiltered jobs (browse sample)
-const allRes = await apiFetch(`/jobs`);
-allJobs = allRes.jobs || normalizeApiResponse(allRes);
-
-  
+  // Skeletons already shown by inline HTML script — fetch both in parallel
+  const [fetchedOrgJobs, allRes] = await Promise.all([
+    fetchOrgJobs(recruiterOrg),
+    apiFetch(`/jobs`)
+  ]);
+  orgJobs = fetchedOrgJobs;
+  allJobs = allRes.jobs || normalizeApiResponse(allRes);
 
   renderRecruiterJobs();
   populateLocationFilter();
@@ -631,9 +637,6 @@ function renderRecruiterJobs() {
 
   const tableEl = document.getElementById("jobsTable");
   if (!tableEl) return;
-
-  // Show skeleton loaders while processing
-  showJobsSkeletonLoader(tableEl, 5);
 
   let filtered = showAll ? [...allJobs] : [...orgJobs];
 
@@ -760,6 +763,7 @@ document.addEventListener("DOMContentLoaded", initRecruiterJobsPage);
 ========================================================= */
 
 let allCandidates = [];
+let currentLlmMap = {};
 let recruiterOrgRoleList = [];
 
 async function initCandidateMatchesPage() {
@@ -801,234 +805,131 @@ async function initCandidateMatchesPage() {
       return;
     }
 
-    // ── Fetch match counts for all jobs in parallel, then sort by most matches ──
+    // Show placeholder while we fetch match counts
     roleDropdown.innerHTML = `<option value="">Sorting by matches…</option>`;
 
+    // Fetch match counts for all jobs in parallel (top_n=1 = minimal payload)
     const matchCounts = await Promise.all(
       orgJobs.map(async j => {
         try {
           const res = await apiFetch(`/matches?job_id=${j.job_id}&top_n=1&offset=0`);
-          const total = res.total_matches ?? (res.matches?.length ?? 0);
-          return { job_id: j.job_id, count: total };
+          return { job_id: j.job_id, count: res.total_matches ?? (res.matches?.length ?? 0) };
         } catch {
           return { job_id: j.job_id, count: 0 };
         }
       })
     );
 
-    // Build a quick lookup: job_id → match count
     const countMap = {};
     matchCounts.forEach(m => { countMap[m.job_id] = m.count; });
 
-    // Sort orgJobs by match count descending
+    // Sort by match count descending — highest match job is always default
     const sortedJobs = [...orgJobs].sort(
       (a, b) => (countMap[b.job_id] || 0) - (countMap[a.job_id] || 0)
     );
 
-    // Populate dropdown — show count badge in label
-    roleDropdown.innerHTML = sortedJobs
-      .map(j => {
-        const loc   = j.city || j.location || "";
-        const count = countMap[j.job_id] || 0;
-        const label = `${j.title}${loc ? ` — ${loc}` : ""} (${count} match${count !== 1 ? "es" : ""})`;
-        return `<option value="${j.job_id}">${label}</option>`;
-      })
-      .join("");
+    roleDropdown.innerHTML = sortedJobs.map(j => {
+      const loc   = j.city || j.location || "";
+      const count = countMap[j.job_id] || 0;
+      const label = `${j.title}${loc ? ` — ${loc}` : ""} (${count} match${count !== 1 ? "es" : ""})`;
+      return `<option value="${j.job_id}">${label}</option>`;
+    }).join("");
 
-    // Default-select the first job (most matches)
+    // Default to first job (most matches)
     const defaultJobId = sortedJobs[0].job_id;
     roleDropdown.value = defaultJobId;
 
-    await loadCandidatesForRole(defaultJobId);
+    // Auto-load the first role
+    if (typeof window.triggerLoadCandidates === "function") {
+      window.triggerLoadCandidates();
+    } else {
+      await loadCandidatesForRole(defaultJobId);
+    }
 
     roleDropdown.addEventListener("change", async () => {
-   
-      await loadCandidatesForRole(roleDropdown.value);
+      if (typeof window.triggerLoadCandidates === "function") {
+        window.triggerLoadCandidates();
+      } else {
+        await loadCandidatesForRole(roleDropdown.value);
+      }
     });
 
     
 // 🔥 SEARCH LISTENER
 document
   .getElementById("candSearchInput")
-  ?.addEventListener("input", renderCandidateMatches);
+  ?.addEventListener("input", () => renderCandidateMatches(currentLlmMap));
 
 // 🔥 SORT LISTENER
 document
   .getElementById("candSortSelect")
-  ?.addEventListener("change", renderCandidateMatches);
+  ?.addEventListener("change", () => renderCandidateMatches(currentLlmMap));
   });
 
 }
 
 async function loadCandidatesForRole(jobId) {
+  // If the new cand-matches page is present, its own skeleton is already shown
   const container = document.getElementById("candMatchesTable");
-  if (!container) return;
 
-  showCandidatesSkeletonLoader(container, 5);
-
-  const selectedJob = orgJobs.find(j => j.job_id === jobId);  // exact match by ID
+  const selectedJob = orgJobs.find(j => j.job_id === jobId);
   if (!selectedJob) {
-    container.innerHTML = "No job found.";
+    if (container) container.innerHTML = "No job found.";
     return;
   }
 
   selectedJobIdForCandidates = selectedJob.job_id;
+
   let res;
-
-try {
-  res = await apiFetch(
-    `/matches?job_id=${selectedJob.job_id}&top_n=50&offset=0`
-  );
-} catch(e) {
-  
-  container.innerHTML = "Match service temporarily unavailable.";
-  return;
-}
-
-  // apiFetch already unwraps Lambda body → res is {matches:[...], total_matches:N}
-  const data = res.matches || normalizeApiResponse(res);
-
-if (!data.length) {
-  container.innerHTML = "No matching candidates found.";
-  return;
-}
-
-// 🔥 Enrich candidates with Firestore data
-const enriched = [];
-
-for (const match of data) {
-  const snap = await getDoc(doc(db, "candidates", match.candidate_id));
-  const candidateData = snap.exists() ? snap.data() : {};
-
-  enriched.push({
-    ...match,
-    name: candidateData.name || match.name || match.email || "",
-    email: candidateData.email || match.email || "",
-    resume_text: candidateData.resume_text || ""
-  });
-}
-
-allCandidates = enriched;
-renderCandidateMatches();
-}
-
-async function renderCandidateMatches() {
-
-  const container = document.getElementById("candMatchesTable");
-  if (!container) return;
-
-  let filtered = [...allCandidates];
-
-  const search = document.getElementById("candSearchInput")?.value.toLowerCase() || "";
-  if (search) {
-    filtered = filtered.filter(c =>
-      c.name?.toLowerCase().includes(search) ||
-      c.email?.toLowerCase().includes(search)
-    );
-  }
-
-  const sortValue = document.getElementById("candSortSelect")?.value;
-  if (sortValue === "name") {
-    filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }
-  if (sortValue === "newest") {
-    filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  }
-  if (sortValue === "oldest") {
-    filtered.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-  }
-
-  if (!filtered.length) {
-    container.innerHTML = "No matching candidates found.";
+  try {
+    res = await apiFetch(`/matches?job_id=${selectedJob.job_id}&top_n=50&offset=0`);
+  } catch(e) {
+    if (container) container.innerHTML = "Match service temporarily unavailable.";
     return;
   }
 
-  // Show skeleton while LLM runs (skipped if cache hit — will be instant)
-  showCandidatesSkeletonLoader(container, filtered.length);
+  const data = res.matches || normalizeApiResponse(res);
+  if (!data.length) {
+    if (container) container.innerHTML = `<div class="empty-state"><h4>No candidates found</h4><p>No matches for this job yet.</p></div>`;
+    return;
+  }
 
-  // 🤖 LLM enrichment — cached by selectedJobIdForCandidates so switching
-  // back to a role you already viewed never calls Groq again
-  const llmResults = await enrichCandidatesWithLLM(filtered, selectedJobIdForCandidates);
-  const llmMap = {};
-  llmResults.forEach(r => { llmMap[r.candidate_id] = r; });
+  // Batch all Firestore fetches in parallel
+  const enriched = await Promise.all(data.map(async match => {
+    try {
+      const snap = await getDoc(doc(db, "candidates", match.candidate_id));
+      const cd = snap.exists() ? snap.data() : {};
+      return { ...match, name: cd.name || match.name || match.email || "", email: cd.email || match.email || "" };
+    } catch { return match; }
+  }));
 
-  const cards = filtered.map((match) => {
+  allCandidates = enriched;
+  currentLlmMap = {};
 
-    const percent = match.match_percent != null ? match.match_percent.toFixed(1) : "0";
+  // ── PHASE 1: Render immediately with match data ──
+  if (typeof window.renderCandidateCards === "function") {
+    window.renderCandidateCards(enriched, {});
+  }
 
-    const skills =
-      match.matched_skills ||        // ✅ API returns this directly
-      match.explanation?.skill_overlap ||
-      match.explanation?.top_skills ||
-      match.skills ||
-      (
-        match.explanation?.top_reason
-          ? match.explanation.top_reason
-              .replace("Strong match in:", "")
-              .split(",")
-              .map(s => s.trim())
-          : []
-      );
-
-    const llm = llmMap[match.candidate_id] || {};
-
-   return `
-<div class="cand-card ${llm.shortlist_flag ? "ai-shortlist" : ""}">
-
-  ${llm.shortlist_flag ? `<div class="ai-top-badge">⭐ AI Recommended</div>` : ""}
-
-  <div class="cand-header">
-    <div class="cand-main">
-      <div class="cand-title">${(match.name && match.name !== match.email) ? match.name : (match.email?.split("@")[0] || "Candidate")}</div>
-      <div class="cand-email">${match.email || "-"}</div>
-    </div>
-    <div class="cand-score">
-      <span class="match-pill">${percent}%</span>
-    </div>
-  </div>
-
-  ${(llm.inferred_level || match.level)
-    ? `<div class="cand-level"><span class="skill-pill subtle">${llm.inferred_level || match.level}</span></div>`
-    : ""}
-
-  <div class="cand-skills">
-    ${
-      llm.key_strengths && llm.key_strengths.length
-        ? llm.key_strengths.map(s => `<span class="skill-pill">${s}</span>`).join("")
-        : (match.matched_skills || []).slice(0,4).map(s => `<span class="skill-pill">${s}</span>`).join("")
-        || `<span class="skill-pill subtle">No skills listed</span>`
+  // ── PHASE 2: LLM enrichment in background — patches cards silently ──
+  enrichCandidatesWithLLM(enriched, selectedJobIdForCandidates).then(llmResults => {
+    const llmMap = {};
+    llmResults.forEach(r => { llmMap[r.candidate_id] = r; });
+    currentLlmMap = llmMap;
+    if (typeof window.patchCandidateLlm === "function") {
+      window.patchCandidateLlm(llmMap);
     }
-  </div>
-
-  <div class="ai-insight">
-    ${llm.recruiter_summary
-      ? `✨ ${llm.recruiter_summary}`
-      : match.explanation?.top_reason
-        ? `✨ ${match.explanation.top_reason}`
-        : `<span style="opacity:0.4;font-style:italic">No summary available</span>`}
-  </div>
-
-  <div class="cand-actions" style="display:flex;gap:8px;">
-    <a href="rec-actions.html?id=${match.candidate_id}&job=${selectedJobIdForCandidates}" class="view-btn" style="flex:1;text-align:center;">
-      View Profile →
-    </a>
-    <button
-      class="view-btn"
-      style="flex:1;background:rgba(122,162,255,0.08);border:1px solid rgba(122,162,255,0.2);cursor:pointer;"
-      onclick="openCandidateAnalysis('${match.candidate_id}', '${(match.name||'').replace(/'/g,'')}', '${selectedJobIdForCandidates}')">
-      🔍 Analyse
-    </button>
-  </div>
-
-</div>
-`;
-  });
-
-  container.innerHTML = cards.join("");
+  }).catch(() => {});
 }
 
-document.addEventListener("DOMContentLoaded", initCandidateMatchesPage);
+window.loadCandidatesForRole = loadCandidatesForRole;
 
+// Keep old renderCandidateMatches for any legacy callers
+async function renderCandidateMatches(llmMap) {
+  if (typeof window.renderCandidateCards === "function") {
+    window.renderCandidateCards(allCandidates, llmMap || currentLlmMap || {});
+  }
+}
 /* =========================================================
    RECRUITER ACTIONS PAGE LOGIC
 ========================================================= */
@@ -1309,6 +1210,7 @@ Return ONLY the email body text, no subject line, no JSON.`;
 }
 
 document.addEventListener("DOMContentLoaded", initRecruiterActionsPage);
+document.addEventListener("DOMContentLoaded", initCandidateMatchesPage);
 /* =========================================================
    RECRUITER CANDIDATE ANALYSIS MODAL
    Mirrors candidate-side "Know More" but reversed:

@@ -1,10 +1,3 @@
-/* =========================================================
-   LLM CLIENT — PROXY VERSION
-   Keys live in Lambda env vars, never in the browser.
-   All failover logic runs server-side in llm-proxy Lambda.
-   
-   api.js, candidate.js, resume.html — no changes needed.
-========================================================= */
 
 const LLM_ENDPOINT = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod/llm";
 

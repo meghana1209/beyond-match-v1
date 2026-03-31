@@ -390,6 +390,54 @@ body {
   font-family: 'DM Sans', sans-serif;
 }
 
+/* Green cluster when matched jobs are inside */
+.cluster-icon.matched {
+  background: linear-gradient(135deg, #4ade80, #16a34a);
+  border-color: rgba(74,222,128,0.5);
+  box-shadow: 0 0 0 4px rgba(74,222,128,0.15), 0 4px 12px rgba(22,163,74,0.5);
+}
+
+/* ── MATCHED JOB PANEL CARDS ── */
+.panel-job-matched {
+  border-color: rgba(74,222,128,0.25) !important;
+  background: linear-gradient(135deg, rgba(74,222,128,0.04), transparent) !important;
+}
+.panel-job-matched:hover {
+  border-color: rgba(74,222,128,0.45) !important;
+}
+
+.panel-match-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4ade80;
+  background: rgba(74,222,128,0.1);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 5px;
+  padding: 2px 8px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.panel-section-divider {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7fa8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 2px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(122,162,255,0.07);
+}
+
+.panel-section-divider.panel-section-matched {
+  color: #4ade80;
+  border-top-color: rgba(74,222,128,0.15);
+}
+
 /* Override Leaflet popup to match theme */
 .leaflet-popup-content-wrapper {
   background: var(--card);
