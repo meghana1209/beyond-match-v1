@@ -187,6 +187,24 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
   gap:8px; padding:30px 20px; color:var(--text-3); font-size:13px; text-align:center; }
 .empty .ei { font-size:26px; opacity:.3; }
 
+/* ── SETUP ALERT BANNER ── */
+#setupAlert {
+  display:none; align-items:flex-start; gap:14px;
+  background:linear-gradient(135deg,rgba(122,162,255,0.07),rgba(167,139,250,0.07));
+  border:1px solid rgba(122,162,255,0.22); border-radius:var(--r-lg);
+  padding:16px 20px; }
+#setupAlert .sa-icon { font-size:22px; flex-shrink:0; margin-top:1px; }
+#setupAlert .sa-body { flex:1; }
+#setupAlert .sa-title { font-size:14px; font-weight:700; color:var(--text-1); margin-bottom:4px; }
+#setupAlert .sa-msg   { font-size:12.5px; color:var(--text-2); line-height:1.6; }
+#setupAlert .sa-steps { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+#setupAlert .sa-step  { display:inline-flex; align-items:center; gap:6px;
+  background:rgba(255,255,255,0.04); border:1px solid rgba(122,162,255,0.15);
+  border-radius:20px; padding:5px 13px; font-size:12px; font-weight:600; color:var(--blue); }
+#setupAlert .sa-step a { color:inherit; text-decoration:none; }
+#setupAlert .sa-step a:hover { text-decoration:underline; }
+#setupAlert .sa-arrow { color:var(--text-3); font-size:13px; }
+
 /* ── LOADING BAR ── */
 #lbar { position:fixed; top:0; left:0; height:2px; z-index:999;
   background:linear-gradient(90deg,var(--blue),var(--purple));
@@ -243,6 +261,22 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
         </svg>
         Refresh
       </button>
+    </div>
+  </div>
+
+  <!-- SETUP GUIDANCE ALERT -->
+  <div id="setupAlert">
+    <div class="sa-icon">🚀</div>
+    <div class="sa-body">
+      <div class="sa-title">Complete setup to unlock your dashboard metrics</div>
+      <div class="sa-msg">Dashboard metrics are calculated from your resume analysis and job match results. Follow the steps below to get your personalised insights.</div>
+      <div class="sa-steps">
+        <span class="sa-step">① <a href="resume.html">Visit Resume Analysis</a></span>
+        <span class="sa-arrow">→</span>
+        <span class="sa-step">② <a href="jobmatches.html">Run Job Matches</a></span>
+        <span class="sa-arrow">→</span>
+        <span class="sa-step">③ Return here to view your metrics</span>
+      </div>
     </div>
   </div>
 
@@ -952,18 +986,23 @@ function renderTable(matches, cid) {
 /* =====================================================
    EMPTY STATE
 ===================================================== */
-function showEmpty(msg) {
+function showEmpty(msg, showSetupGuide = false) {
   st("sub", msg);
+  // Show setup guidance alert when the user hasn't run resume analysis + job matches yet
+  const alert = $("setupAlert");
+  if (alert) alert.style.display = showSetupGuide ? "flex" : "none";
   $("tblBody").innerHTML = `<tr><td colspan="7"><div class="empty">
-    <span class="ei">📄</span><strong>No resume found</strong>
-    <p>Go to <a href="resume.html" style="color:var(--blue)">Resume Analysis</a> to upload your CV.</p>
+    <span class="ei">📄</span><strong>No matches found</strong>
+    <p>Please visit <a href="resume.html" style="color:var(--blue)">Resume Analysis</a> and then
+       <a href="jobmatches.html" style="color:var(--blue)">Job Matches</a> — once you've triggered
+       the match view, your dashboard metrics will populate here.</p>
   </div></td></tr>`;
   ["kAvg","kTotal","kTop","kStrong","kSkills"].forEach(id=>st(id,"—"));
-  $("rolesRow").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Not available</span>`;
-  $("skillCloud").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Upload resume to see skills</span>`;
-  $("gapList").innerHTML=`<span style="color:var(--text-3);font-size:12px;">No data yet</span>`;
-  $("rings").innerHTML=`<div class="empty" style="padding:12px;"><span class="ei">📄</span>No data</div>`;
-  $("coList").innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🏢</span>No data</div>`;
+  $("rolesRow").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Complete setup to see recommended roles</span>`;
+  $("skillCloud").innerHTML=`<span style="color:var(--text-3);font-size:12px;">Run Resume Analysis to see your matched skills</span>`;
+  $("gapList").innerHTML=`<span style="color:var(--text-3);font-size:12px;">No data yet — visit Job Matches first</span>`;
+  $("rings").innerHTML=`<div class="empty" style="padding:12px;"><span class="ei">🎯</span>No match data yet</div>`;
+  $("coList").innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🏢</span>No company data yet</div>`;
 }
 
 /* =====================================================
@@ -982,11 +1021,12 @@ async function boot() {
     if (!cand) {
       showEmpty("Please log in to view your dashboard.");
       bar(100); btn?.classList.remove("spin"); return;
+
     }
     showPill(cand);
 
     if (cand.isLocal) {
-      showEmpty("Upload your resume to unlock personalised matching.");
+      showEmpty("To see your dashboard metrics, please complete the setup steps below.", true);
       bar(100); btn?.classList.remove("spin"); return;
     }
 
@@ -1010,13 +1050,14 @@ async function boot() {
                    : Array.isArray(jobsRes.jobs) ? jobsRes.jobs : [];
 
     if (!matches.length) {
-      showEmpty(`No matches yet for ${cand.name} — try updating your resume.`);
+      showEmpty(`No matches yet for ${cand.name} — please visit Resume Analysis and then Job Matches, and trigger the match view to populate your dashboard metrics.`, true);
       // Still render market from jobs
       if(allJobs.length) renderMarket(allJobs, matches);
       bar(100); btn?.classList.remove("spin"); return;
     }
 
-    // 3 — render everything
+    // 3 — render everything (hide setup alert since data is available)
+    const alertEl = $("setupAlert"); if(alertEl) alertEl.style.display = "none";
     renderKPIs(matches, meta);
     renderRoles(roles);
     renderDist(matches);
