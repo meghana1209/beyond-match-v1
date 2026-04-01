@@ -448,9 +448,9 @@ window.patchCandidateLlm = function(llmMap) {
     const llm = llmMap[card.dataset.cid];
     if (!llm) return;
     const ins = card.querySelector('.card-insight');
+    // Patch insight text for top-5 candidates that got LLM summaries
     if (ins && llm.recruiter_summary) {
-      ins.textContent = '✦ ' + llm.recruiter_summary;
-      ins.classList.remove('muted');
+      ins.innerHTML = `<span>✦ ${llm.recruiter_summary}</span>`;
     }
     if (llm.shortlist_flag && !card.querySelector('.ai-top-badge')) {
       card.classList.add('ai-shortlist');
@@ -513,12 +513,12 @@ function _renderGrid(candidates, llmMap) {
 
         <div class="card-sep"></div>
 
-        <div class="card-insight ${llm.recruiter_summary ? '' : 'muted'}">
-          ${llm.recruiter_summary
-            ? `✦ ${llm.recruiter_summary}`
-            : c.explanation?.top_reason
-              ? `✦ ${c.explanation.top_reason}`
-              : 'Analysing candidate…'}
+        <div class="card-insight" data-cid-insight="${c.candidate_id}">
+          ${(() => {
+            const txt = llm.recruiter_summary || c.explanation?.top_reason;
+            if (txt) return `<span>✦ ${txt}</span>`;
+            return `<span style="color:#4a5580;font-size:11.5px;font-style:italic;">🔍 Click <strong style="color:#7aa2ff;">Analyse</strong> for full candidate insights</span>`;
+          })()}
         </div>
 
         <div class="card-actions">

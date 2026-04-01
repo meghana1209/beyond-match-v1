@@ -207,7 +207,7 @@ import { callGemini, isGeminiAvailable } from "./gemini.js";
 // Cache: candidate_id → enriched LLM results array
 // Uses sessionStorage so results survive page re-renders within the same tab
 const llmMatchCache = {
-  _key: (k) => `llmCache_${k}`,
+  _key: (k) => `llmCache_v3_${k}`,
   get(k) {
     if (!k) return null;
     try {
@@ -229,34 +229,41 @@ async function enrichMatchesWithLLM(matches, allJobs, cacheKey) {
     return llmMatchCache.get(cacheKey);
   }
 
-  const slim = matches.map((m, i) => {
+  // Only top 10 to LLM — smaller payload = faster + better quality
+  const top10 = matches.slice(0, 10);
+  const slim = top10.map((m, i) => {
     const job = allJobs.find(j => j.job_id === m.job_id) || {};
     return {
       index: i,
       job_id: m.job_id,
       title: m.title || job.title || "Unknown",
-      company: job.company || "Unknown",
-      location: job.location_display || job.city || "Unknown",
-      salary_min: job.salary_min || null,
-      salary_max: job.salary_max || null,
-      description_snippet: (job.description || "").slice(0, 300),
-      match_percent: m.match_percent,
-      existing_reason: m.explanation?.top_reason || ""
+      jd_snippet: (job.description || "").slice(0, 200),
+      match_percent: m.match_percent
     };
   });
 
-const prompt = `You are a career advisor AI inside a recruitment platform.
-Given these job matches for a candidate, do two things:
-1. Re-rank them from best to worst fit. match_percent is the PRIMARY ranking signal. A job with lower match_percent must ALWAYS rank below a job with higher match_percent, regardless of salary or other factors.
-2. For each job write a single friendly sentence (max 20 words) explaining WHY it suits the candidate. Start with "Great fit because" or "Strong match —" etc.
-IMPORTANT: Return ONLY a raw JSON array. No markdown, no backticks, no explanation. Just the JSON.
-Each item: { "index": <number>, "job_id": "...", "ai_rank": 1, "ai_insight": "..." }
+  // Debug: log how many jobs have JD snippets
+  const withJD = slim.filter(s => s.jd_snippet && s.jd_snippet.length > 20).length;
+  console.log(`[LLM] ${slim.length} jobs sent, ${withJD} have JD snippets`);
 
-Matches:
-${JSON.stringify(slim, null, 2)}`;
+  const prompt = `You are a career advisor helping a candidate understand their job matches.
+For each job write ONE short sentence (max 14 words) telling the candidate something specific about why this role could suit them.
+Rules:
+- Read jd_snippet carefully — mention what the role actually involves (e.g. "building data pipelines", "designing React interfaces", "managing cloud deployments")
+- If jd_snippet is empty, infer from the job title what the role involves
+- NEVER use: "high match", "great fit", "strong match", "relevant experience", "aligns with your background"
+- Each sentence must be unique and specific to that job
+- Re-rank by match_percent descending (higher % = ai_rank 1)
+Return ONLY a raw JSON array, no markdown:
+[{"index":<n>,"job_id":"...","ai_rank":<n>,"ai_insight":"<one specific sentence about this role>"}]
 
+Jobs:
+${JSON.stringify(slim)}`;
   try {
-    const raw = await callGemini(prompt);
+    const raw = await Promise.race([
+      callGemini(prompt),
+      new Promise(resolve => setTimeout(() => resolve(""), 8000))
+    ]);
     if (!raw) return matches.map((m, i) => ({ job_id: m.job_id, ai_rank: i + 1, ai_insight: null }));
 
     const clean = raw.replace(/```json|```/g, "").trim();

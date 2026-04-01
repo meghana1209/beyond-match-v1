@@ -141,67 +141,75 @@ window.showToast = showToast;
 // Cache: job_id → enriched LLM results array
 const llmCandidateCache = {};
 
-async function enrichCandidatesWithLLM(matches, cacheKey) {
+async function enrichCandidatesWithLLM(matches, cacheKey, selectedJob) {
 
   if (cacheKey && llmCandidateCache[cacheKey]) {
-    
     return llmCandidateCache[cacheKey];
   }
 
-  const slim = matches.slice(0, 10).map(m => ({
-    id: m.candidate_id,
-    skills: (m.matched_skills || []).slice(0, 4),
-    pct: m.match_percent
+  const jobTitle  = selectedJob?.title || "this role";
+  const jdSnippet = (selectedJob?.description || selectedJob?.jd || "").slice(0, 300);
+
+  // Only generate insights for top 5 — focused, fast, high quality
+  const top5 = matches.slice(0, 5);
+  const slim = top5.map(m => ({
+    id:     m.candidate_id,
+    level:  m.level || "",
+    skills: (m.matched_skills || []).slice(0, 5),
+    pct:    Math.round(m.match_percent || 0)
   }));
 
-  const prompt = `Rank these candidates. Return ONLY a JSON array, no markdown.
-Each: {"candidate_id":"<id>","recruiter_summary":"1 sentence max 12 words","shortlist_flag":true/false}
-Top 2 get shortlist_flag true.
-${JSON.stringify(slim)}`;
+  const prompt = `Recruiter is hiring for: "${jobTitle}".
+${jdSnippet ? `Role needs: ${jdSnippet}` : ""}
+
+For each candidate write ONE sentence (max 14 words) explaining why they stand out for this role.
+Rules:
+- Be specific — mention their skill level or what they bring (e.g. "Junior analyst with strong SQL foundation ideal for this reporting role.")
+- Do NOT repeat skill tag names literally — speak about what those skills enable
+- Top 2 by pct get shortlist_flag true, rest false
+Return ONLY JSON array, no markdown:
+[{"candidate_id":"<id>","recruiter_summary":"<one sentence>","shortlist_flag":true/false}]
+
+Candidates: ${JSON.stringify(slim)}`;
+
+  // Start with empty summaries for all — top 5 will be filled by LLM
+  const result = matches.map(m => ({
+    candidate_id:      m.candidate_id,
+    recruiter_summary: null,   // null = show fallback CTA in UI
+    shortlist_flag:    false
+  }));
 
   try {
-
     const raw = await Promise.race([
-  callGemini(prompt),
-  new Promise(resolve => setTimeout(() => resolve(""), 25000))
-]);
-    if (!raw) {
-      return matches.map(m => ({
-        candidate_id: m.candidate_id,
-        recruiter_summary: null,
-        shortlist_flag: false
-      }));
+      callGemini(prompt),
+      new Promise(resolve => setTimeout(() => resolve(""), 7000))
+    ]);
+
+    if (raw) {
+      let clean = raw.replace(/```json|```/g, "").trim();
+      if (!clean.endsWith("]")) {
+        const cut = clean.lastIndexOf("}");
+        if (cut > -1) clean = clean.slice(0, cut + 1) + "]";
+      }
+      const llmData = JSON.parse(clean);
+      const llmMap = {};
+      llmData.forEach(r => { llmMap[r.candidate_id] = r; });
+
+      // Patch top 5 with LLM summaries + shortlist flags
+      result.forEach(r => {
+        const l = llmMap[r.candidate_id];
+        if (l) {
+          r.recruiter_summary = l.recruiter_summary || null;
+          r.shortlist_flag    = !!l.shortlist_flag;
+        }
+      });
     }
+  } catch (_) { /* silent — fallback CTA shown for all */ }
 
-    let clean = raw.replace(/```json|```/g, "").trim();
-
-    // Repair truncated JSON: find last complete object and close the array
-    if (!clean.endsWith("]")) {
-      const lastComplete = clean.lastIndexOf("},");
-      const lastObj      = clean.lastIndexOf("}");
-      const cutAt        = lastComplete > -1 ? lastComplete + 1 : lastObj + 1;
-      clean = clean.slice(0, cutAt) + "]";
-    }
-
-    const result = JSON.parse(clean);
-
-    if (cacheKey) {
-      llmCandidateCache[cacheKey] = result;
-    }
-
-    return result;
-
-  } catch (err) {
-
-    
-
-    return matches.map(m => ({
-      candidate_id: m.candidate_id,
-      recruiter_summary: null,
-      shortlist_flag: false
-    }));
-  }
+  if (cacheKey) llmCandidateCache[cacheKey] = result;
+  return result;
 }
+
 
 export { apiFetch };
 
@@ -894,12 +902,18 @@ async function loadCandidatesForRole(jobId) {
     return;
   }
 
-  // Batch all Firestore fetches in parallel
+  // Batch all Firestore fetches in parallel — also grab resume_text and applied_role
   const enriched = await Promise.all(data.map(async match => {
     try {
       const snap = await getDoc(doc(db, "candidates", match.candidate_id));
       const cd = snap.exists() ? snap.data() : {};
-      return { ...match, name: cd.name || match.name || match.email || "", email: cd.email || match.email || "" };
+      return {
+        ...match,
+        name:         cd.name         || match.name  || match.email || "",
+        email:        cd.email        || match.email || "",
+        resume_text:  (cd.resume_text || "").slice(0, 600),
+        applied_role: cd.applied_role || ""
+      };
     } catch { return match; }
   }));
 
@@ -912,7 +926,7 @@ async function loadCandidatesForRole(jobId) {
   }
 
   // ── PHASE 2: LLM enrichment in background — patches cards silently ──
-  enrichCandidatesWithLLM(enriched, selectedJobIdForCandidates).then(llmResults => {
+  enrichCandidatesWithLLM(enriched, selectedJobIdForCandidates, selectedJob).then(llmResults => {
     const llmMap = {};
     llmResults.forEach(r => { llmMap[r.candidate_id] = r; });
     currentLlmMap = llmMap;
