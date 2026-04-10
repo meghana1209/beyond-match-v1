@@ -1,6 +1,10 @@
+/* =========================================================
+   SAVED JOBS
+   Loads and renders the current user's bookmarked jobs.
+   Supports animated card removal.
+========================================================= */
 import { onAuthStateChanged } from
-"https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
+  "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   collection,
   getDocs,
@@ -10,8 +14,34 @@ import {
   where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const db = window.db;
+const db   = window.db;
 const auth = window.auth;
+
+const EMPTY_STATE_HTML = `
+  <div class="empty-state">
+    <div class="empty-state-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      </svg>
+    </div>
+    <h4>No saved jobs yet</h4>
+    <p>Head to <a href="jobmatches.html">Job Matches</a> and bookmark roles you like.</p>
+  </div>`;
+
+function formatSalary(job) {
+  if (job.salary_min && job.salary_max) {
+    return `$${Math.round(job.salary_min).toLocaleString()} – $${Math.round(job.salary_max).toLocaleString()}`;
+  }
+  if (job.salary_min) return `From $${Math.round(job.salary_min).toLocaleString()}`;
+  if (job.salary_max) return `Up to $${Math.round(job.salary_max).toLocaleString()}`;
+  return "";
+}
+
+function updateCount(count, grid) {
+  if (!count) return;
+  const n = grid.querySelectorAll(".saved-card").length;
+  count.textContent = n ? `${n} saved job${n === 1 ? "" : "s"}` : "";
+}
 
 async function loadSavedJobs() {
   const user = auth.currentUser;
@@ -20,65 +50,41 @@ async function loadSavedJobs() {
   const grid  = document.getElementById("savedJobsGrid");
   const count = document.getElementById("savedCount");
 
-  // skeletons already shown by inline script; keep them while fetching
   const q        = query(collection(db, "saved_jobs"), where("user_id", "==", user.uid));
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-        </div>
-        <h4>No saved jobs yet</h4>
-        <p>Head to <a href="jobmatches.html">Job Matches</a> and bookmark roles you like.</p>
-      </div>`;
-    if (count) count.textContent = '';
+    grid.innerHTML = EMPTY_STATE_HTML;
+    if (count) count.textContent = "";
     return;
   }
 
   if (count) {
     const n = snapshot.size;
-    count.textContent = `${n} saved job${n === 1 ? '' : 's'}`;
+    count.textContent = `${n} saved job${n === 1 ? "" : "s"}`;
   }
 
   grid.innerHTML = "";
-  let idx = 0;
 
-  snapshot.forEach(docSnap => {
+  snapshot.forEach((docSnap, idx) => {
     const job      = docSnap.data();
-    const applyUrl = job.apply_url || job.apply_link || '';
-    const hasApply = applyUrl && applyUrl !== '#';
-
-    // Salary display
-    let salary = '';
-    if (job.salary_min && job.salary_max) {
-      salary = `$${Math.round(job.salary_min).toLocaleString()} – $${Math.round(job.salary_max).toLocaleString()}`;
-    } else if (job.salary_min) {
-      salary = `From $${Math.round(job.salary_min).toLocaleString()}`;
-    } else if (job.salary_max) {
-      salary = `Up to $${Math.round(job.salary_max).toLocaleString()}`;
-    }
-
-    const location = job.location || 'Location not specified';
-    const delay    = idx * 55;
-    idx++;
+    const applyUrl = job.apply_url || job.apply_link || "";
+    const hasApply = applyUrl && applyUrl !== "#";
+    const salary   = formatSalary(job);
+    const location = job.location || "Location not specified";
 
     const card = document.createElement("div");
-    card.className = "saved-card";
-    card.style.animationDelay = `${delay}ms`;
-    card.dataset.docid = docSnap.id;
+    card.className         = "saved-card";
+    card.style.animationDelay = `${idx * 55}ms`;
+    card.dataset.docid     = docSnap.id;
 
     card.innerHTML = `
-      <!-- Bookmark icon -->
       <svg class="saved-bookmark" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
       </svg>
 
-      <div class="saved-card-title">${job.title || 'Job Role'}</div>
-      <div class="saved-card-company">${job.company || 'Company not available'}</div>
+      <div class="saved-card-title">${job.title || "Job Role"}</div>
+      <div class="saved-card-company">${job.company || "Company not available"}</div>
 
       <div class="saved-meta">
         <span class="meta-chip">
@@ -89,10 +95,7 @@ async function loadSavedJobs() {
         </span>
       </div>
 
-      ${salary
-        ? `<div class="saved-salary">${salary}</div>`
-        : `<div class="saved-salary unknown">Salary not disclosed</div>`
-      }
+      <div class="saved-salary ${salary ? "" : "unknown"}">${salary || "Salary not disclosed"}</div>
 
       <div class="card-divider"></div>
 
@@ -113,7 +116,6 @@ async function loadSavedJobs() {
                Apply
              </button>`
         }
-
         <button class="saved-btn remove" onclick="removeSavedJob('${docSnap.id}', this)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
@@ -128,40 +130,27 @@ async function loadSavedJobs() {
 }
 
 async function removeSavedJob(docId, btn) {
-  // Find the card and animate it out
-  const card = btn?.closest('.saved-card');
+  const card = btn?.closest(".saved-card");
   if (card) {
-    card.classList.add('removing');
+    card.classList.add("removing");
     await new Promise(r => setTimeout(r, 260));
     card.remove();
   }
 
   await deleteDoc(doc(db, "saved_jobs", docId));
 
-  // Update count
   const grid  = document.getElementById("savedJobsGrid");
   const count = document.getElementById("savedCount");
-  const remaining = grid.querySelectorAll('.saved-card').length;
 
-  if (remaining === 0) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-        </div>
-        <h4>No saved jobs yet</h4>
-        <p>Head to <a href="jobmatches.html">Job Matches</a> and bookmark roles you like.</p>
-      </div>`;
-    if (count) count.textContent = '';
+  if (!grid.querySelectorAll(".saved-card").length) {
+    grid.innerHTML = EMPTY_STATE_HTML;
+    if (count) count.textContent = "";
   } else {
-    if (count) count.textContent = `${remaining} saved job${remaining === 1 ? '' : 's'}`;
+    updateCount(count, grid);
   }
 }
 
 window.removeSavedJob = removeSavedJob;
-
 
 onAuthStateChanged(auth, (user) => {
   if (!user) return;

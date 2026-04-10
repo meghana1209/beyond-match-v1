@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></script>
 
 <style>
 :root {
@@ -59,11 +60,11 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
 .logout-btn:hover { background:rgba(248,113,113,0.08); }
 
 /* ── MAIN ── */
-.main { flex:1; min-width:0; height:100vh; overflow-y:auto;
-  padding:24px 24px 48px; display:flex; flex-direction:column; gap:16px; }
+.main { flex:1; min-width:0; height:100vh; overflow:hidden;
+  padding:24px 24px 24px; display:flex; flex-direction:column; gap:16px; }
 
 /* ── HEADER ── */
-.header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; flex-shrink:0; }
 .header h1 { font-size:20px; font-weight:700; letter-spacing:-0.02em; }
 .header p { font-size:12px; color:var(--text-3); margin-top:3px; }
 
@@ -218,6 +219,29 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
 .rbtn:hover { background:rgba(122,162,255,0.14); }
 .rbtn.spin svg { animation:spin .85s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── POWER BI EMBED — fills all remaining vertical space, no zoom needed ── */
+#pbi-container {
+  flex: 1;
+  min-height: 0;        /* lets flexbox shrink past content size */
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+/* iframe Power BI injects must fill the container */
+#pbi-container iframe {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+}
+#pbi-shimmer {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+}
 </style>
 </head>
 <body>
@@ -243,9 +267,9 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
   <div class="header">
     <div>
       <h1>My Dashboard</h1>
-      <p id="sub">Loading your personalised insights…</p>
+      <p id="sub">Loading your dashboard…</p>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <div style="display:flex;gap:10px;align-items:center;">
       <div class="cand-pill" id="pill" style="display:none;">
         <div class="avatar" id="av">?</div>
         <div>
@@ -255,7 +279,8 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
         </div>
       </div>
       <button class="rbtn" id="rbtn" onclick="boot()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5">
           <polyline points="23 4 23 10 17 10"/>
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
@@ -467,187 +492,51 @@ body { display:flex; min-height:100vh; background:var(--bg); color:var(--text-1)
 </main>
 
 <script>
-/* =====================================================
-   CONFIG
-===================================================== */
-const API = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
-let CH = {};  // chart instances
+/* =========================================================
+   PASTE VALUES FROM YOUR POWER BI DEVELOPER HERE
+   When developer sends EMBED_ACCESS_TOKEN, EMBED_URL,
+   REPORT_ID and TOKEN_TYPE from the playground, paste them:
+========================================================= */
+const HARDCODED = {
+  accessToken: "",   // ← paste EMBED_ACCESS_TOKEN value here
+  embedUrl:    "https://app.powerbi.com/reportEmbed?reportId=ee6e976c-5b91-4920-b8d5-41da6b4a4eb0&autoAuth=true&ctid=0c9e228c-dc90-4c87-941e-fea8952b7dd1",
+  reportId:    "ee6e976c-5b91-4920-b8d5-41da6b4a4eb0",
+  tokenType:   "0"   // "0" = AAD (autoAuth=true)
+};
 
-Chart.defaults.color = "#6b7fa8";
-Chart.defaults.font.family = "'DM Sans', sans-serif";
-Chart.defaults.font.size = 11.5;
+const API_LAMBDA = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod/getEmbedUrl";
+const FALLBACK_REPORT_ID = "ee6e976c-5b91-4920-b8d5-41da6b4a4eb0";
 
-const PAL = [
-  "rgba(122,162,255,.82)","rgba(74,222,128,.78)","rgba(167,139,250,.78)",
-  "rgba(251,191,36,.78)","rgba(248,113,113,.78)","rgba(56,189,248,.78)"
-];
+/* ── helpers ── */
+const $ = id => document.getElementById(id);
 
-/* =====================================================
-   LOADING BAR
-===================================================== */
-function bar(p) {
-  const el = document.getElementById("lbar");
-  el.style.width = p + "%";
-  if (p >= 100) setTimeout(() => el.style.width = "0", 600);
+function showErr(msg) {
+  const b = $("errBanner");
+  if (b) { b.textContent = msg; b.style.display = "block"; }
 }
 
-/* =====================================================
-   API FETCH (matches exact existing pattern from api.js)
-===================================================== */
-async function apiFetch(path) {
-  const r = await fetch(API + path, { headers: { "Content-Type": "application/json" } });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const txt = await r.text();
-  if (!txt) return {};
-  const d = JSON.parse(txt);
-  if (d.statusCode && typeof d.body === "string") {
-    try { return JSON.parse(d.body); } catch { return {}; }
-  }
-  return d;
-}
+function embedReport(accessToken, embedUrl, reportId, tokenType) {
+  const models    = window["powerbi-client"].models;
+  const container = $("pbi-container");
+  $("pbi-shimmer")?.remove();
 
-/* =====================================================
-   RESOLVE CANDIDATE from Firestore
-===================================================== */
-async function resolveCandidate() {
-  if (!window.auth?.currentUser || !window.db) return null;
-  try {
-    const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-    const uSnap = await getDoc(doc(window.db, "users", window.auth.currentUser.uid));
-    if (!uSnap.exists()) return null;
-    const ud = uSnap.data();
-    const cid = ud.latest_candidate_id || ud.candidate_id;
-    if (!cid) return null;
-    let cd = {};
-    try {
-      const cSnap = await getDoc(doc(window.db, "candidates", cid));
-      if (cSnap.exists()) cd = cSnap.data();
-    } catch(e) {}
-    return {
-      id:      cid,
-      name:    cd.name || ud.email?.split("@")[0] || "Candidate",
-      email:   ud.email || "",
-      role:    cd.applied_role || "General",
-      isLocal: cid.startsWith("local_")
-    };
-  } catch(e) { console.warn("resolveCandidate:", e); return null; }
-}
+  const tType = (tokenType === "0" || tokenType === 0)
+    ? models.TokenType.Aad
+    : models.TokenType.Embed;
 
-/* =====================================================
-   HELPERS
-===================================================== */
-const $  = id => document.getElementById(id);
-const st = (id, v) => { const e=$(id); if(e) e.textContent = v; };
-const capitalise = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-const ucWords = s => s ? s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()) : s;
-
-/* =====================================================
-   CANDIDATE PILL
-===================================================== */
-function showPill(c) {
-  const ini = c.name.trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
-  $("av").textContent    = ini;
-  $("pname").textContent = c.name;
-  $("prole").textContent = c.role;
-  $("pid").textContent   = `ID: ${c.id}`;
-  $("pill").style.display = "flex";
-}
-
-/* =====================================================
-   KPIs  (personalised from matches response)
-===================================================== */
-function renderKPIs(matches, meta) {
-  const scores  = matches.map(m => m.match_percent).filter(Boolean);
-  const avg     = scores.length ? +(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : 0;
-  const top     = scores.length ? Math.max(...scores) : 0;
-  const topJob  = matches.find(m => m.match_percent === top);
-
-  // Strong = ≥70% (the threshold the matching engine uses)
-  const STRONG_THRESHOLD = 70;
-  const strong  = scores.filter(s => s >= STRONG_THRESHOLD).length;
-
-  // Unique skills you have that appear across your matches
-  const allMatchedSkills = new Set(matches.flatMap(m => m.matched_skills || []));
-  // Unique skills you're missing across your matches
-  const allMissingSkills = new Set(matches.flatMap(m => m.missing_skills || []));
-
-  st("kAvg",    avg   ? `${avg}%`  : "—");
-  st("kTotal",  matches.length     || "—");
-  st("kTop",    top   ? `${+top.toFixed(1)}%` : "—");
-  st("kStrong", strong != null ? strong : "—");
-  st("kSkills", allMatchedSkills.size || "—");
-
-  // Sub-text: precise and honest
-  const avgQual = avg >= 75 ? "🟢 Excellent fit" : avg >= 65 ? "🟡 Good fit" : avg ? "🟠 Moderate fit" : "upload resume";
-  st("kAvgSub",   avgQual);
-  // "13 returned" is honest — top_n=50 but only 13 exist for this candidate
-  st("kTotalSub", `${matches.length} returned by engine`);
-  st("kTopSub",   topJob?.company ? `at ${topJob.company}` : "your best score");
-
-  const badge = $("kStrongBadge");
-  if (badge) {
-    const pct = scores.length ? Math.round((strong / scores.length) * 100) : 0;
-    const col  = pct >= 80 ? "green" : pct >= 50 ? "blue" : "amber";
-    badge.innerHTML = `<div class="kpi-badge ${col}">≥${STRONG_THRESHOLD}% score</div>`;
-  }
-  st("kStrongSub", scores.length ? `${strong} of ${scores.length} jobs qualify` : "jobs scoring ≥70%");
-
-  st("kSkillsSub", allMissingSkills.size > 0
-    ? `${allMissingSkills.size} skill gap${allMissingSkills.size !== 1 ? "s" : ""} to fill`
-    : "no gaps detected");
-}
-
-/* =====================================================
-   CHART 1: TOP MATCHES BAR — actual score per job (horizontal)
-   Much more useful than a donut when scores all cluster in 70-79%
-===================================================== */
-function renderDist(matches) {
-  // Require both a real score AND a non-empty title
-  const scored = matches
-    .filter(m => m.match_percent > 0 && m.title && m.title.trim())
-    .sort((a, b) => b.match_percent - a.match_percent)
-    .slice(0, 10);
-
-  const totalWithScore = matches.filter(m => m.match_percent > 0).length;
-  st("cMatchSub", scored.length < totalWithScore
-    ? `top ${scored.length} of ${totalWithScore} matched jobs`
-    : `all ${scored.length} matched jobs`);
-
-  const labels = scored.map(m => {
-    const t = m.title.trim().split(" ").slice(0, 2).join(" ");
-    const c = m.company && m.company.trim() ? m.company.trim().split(" ")[0] : null;
-    return c ? `${t} · ${c}` : t;
-  });
-  const data   = scored.map(m => +(m.match_percent || 0).toFixed(1));
-  const colors = data.map(v => v >= 80 ? "rgba(74,222,128,.75)" : v >= 70 ? "rgba(122,162,255,.75)" : "rgba(251,191,36,.75)");
-
-  const minScore = data.length ? Math.min(...data) : 0;
-  const xMin = Math.max(0, Math.floor(minScore / 10) * 10 - 10);
-
-  const ctx = $("cDist"); if (!ctx) return;
-
-  // Dynamic height: 28px per bar + 36px for x-axis ticks, min 160px
-  const canvasH = Math.max(160, scored.length * 28 + 36);
-  const wrap = ctx.closest(".cw");
-  if (wrap) wrap.style.minHeight = canvasH + "px";
-
-  if (CH.dist) CH.dist.destroy();
-  CH.dist = new Chart(ctx, {
-    type: "bar",
-    data: { labels, datasets: [{ label: "Match %", data, backgroundColor: colors, borderRadius: 4, borderSkipped: false }] },
-    options: {
-      indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => `  ${c.parsed.x}% match` } }
-      },
-      scales: {
-        x: {
-          min: xMin, max: 100,
-          grid: { color: "rgba(255,255,255,.04)" }, ticks: { color: "#6b7fa8", callback: v => v + "%" },
-          border: { display: false }
-        },
-        y: { grid: { display: false }, ticks: { color: "#b0bcd8", font: { size: 10 } }, border: { display: false } }
+  const report = window.powerbi.embed(container, {
+    type:        "report",
+    id:          reportId || FALLBACK_REPORT_ID,
+    embedUrl:    embedUrl,
+    accessToken: accessToken,
+    tokenType:   tType,
+    permissions: models.Permissions.All,
+    settings: {
+      navContentPaneEnabled: false,
+      background:            models.BackgroundType.Transparent,
+      panes: {
+        filters:      { visible: false },
+        pageNavigation: { visible: true }
       }
     }
   });
@@ -1005,9 +894,7 @@ function showEmpty(msg, showSetupGuide = false) {
   $("coList").innerHTML=`<div class="empty" style="padding:10px;"><span class="ei">🏢</span>No company data yet</div>`;
 }
 
-/* =====================================================
-   MAIN BOOT
-===================================================== */
+/* ── MAIN BOOT ── */
 async function boot() {
   const btn = $("rbtn");
   btn?.classList.add("spin");
@@ -1032,18 +919,27 @@ async function boot() {
 
     st("sub", `Personalised dashboard for ${cand.name}`);
 
-    // 2 — fetch candidate matches + all jobs in parallel
-    const [matchRes, jobsRes] = await Promise.all([
-      apiFetch(`/matches?candidate_id=${cand.id}&top_n=50&offset=0`).catch(e=>{console.warn(e);return{};}),
-      apiFetch("/jobs").catch(e=>{console.warn(e);return[];})
-    ]);
-    bar(70);
+    /* ── PATH A: use hardcoded values if developer has pasted them ── */
+    if (HARDCODED.accessToken && HARDCODED.embedUrl) {
+      console.log("✅ Using hardcoded embed values");
+      embedReport(HARDCODED.accessToken, HARDCODED.embedUrl,
+                  HARDCODED.reportId, HARDCODED.tokenType);
+      return;
+    }
 
-    // Parse matches — response root has mode, recommended_roles, total_matches, matches[]
-    const matches  = Array.isArray(matchRes.matches) ? matchRes.matches
-                   : Array.isArray(matchRes) ? matchRes : [];
-    const roles    = matchRes.recommended_roles || [];
-    const meta     = { total_matches: matchRes.total_matches ?? matches.length };
+    /* ── PATH B: call Lambda ── */
+    console.log("Calling Lambda for embed token...");
+    const res  = await fetch(API_LAMBDA, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ userEmail: email })
+    });
+
+    const data    = await res.json();
+    const payload = (data.body && typeof data.body === "string")
+      ? JSON.parse(data.body) : data;
+
+    console.log("✅ Lambda payload:", payload);
 
     // Parse jobs
     const allJobs  = Array.isArray(jobsRes) ? jobsRes
@@ -1074,27 +970,36 @@ async function boot() {
     bar(100);
 
   } catch(err) {
-    console.error("Dashboard error:", err);
-    st("sub","Failed to load — please refresh.");
-    bar(100);
+    console.error("❌ Dashboard error:", err);
+    showErr(`Failed to load: ${err.message}`);
   }
-  btn?.classList.remove("spin");
 }
 
-/* =====================================================
-   INIT — poll until Firebase auth + db ready
-===================================================== */
+/* ── INIT ── */
 (function init() {
-  let n = 0;
+  let tries = 0;
+
   const t = setInterval(() => {
-    n++;
-    if (window.auth !== undefined && window.db !== undefined) {
+    tries++;
+
+    if (window.auth && window.db) {
       clearInterval(t);
+
       if (typeof window.auth.onAuthStateChanged === "function") {
-        window.auth.onAuthStateChanged(user => { if (user) boot(); });
-      } else { boot(); }
+        window.auth.onAuthStateChanged(user => {
+          if (user) {
+            boot();
+          }
+        });
+      } else {
+        boot();
+      }
     }
-    if (n > 50) { clearInterval(t); console.warn("Auth timeout"); bar(100); }
+
+    if (tries > 50) {
+      clearInterval(t);
+      console.warn("Auth timeout");
+    }
   }, 100);
 })();
 </script>

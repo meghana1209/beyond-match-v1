@@ -442,21 +442,23 @@ window.renderCandidateCards = function(candidates, llmMap) {
 /* Patch LLM insights in-place after background enrichment */
 window.patchCandidateLlm = function(llmMap) {
   _currentLlmMap = llmMap;
-  const grid = document.getElementById('candMatchesTable');
-  if (!grid) return;
-  grid.querySelectorAll('.cand-match-card[data-cid]').forEach(card => {
+  document.querySelectorAll('[data-cid]').forEach(card => {
     const llm = llmMap[card.dataset.cid];
     if (!llm) return;
-    const ins = card.querySelector('.card-insight');
-    // Patch insight text for top-5 candidates that got LLM summaries
+
+    // Patch insight text
+    const ins = card.querySelector('[data-cid-insight]');
     if (ins && llm.recruiter_summary) {
       ins.innerHTML = `<span>✦ ${llm.recruiter_summary}</span>`;
     }
+
+    // Inject AI top badge if it wasn't present at render time
     if (llm.shortlist_flag && !card.querySelector('.ai-top-badge')) {
+      const badge = document.createElement('div');
+      badge.className = 'ai-top-badge';
+      badge.textContent = '⭐ AI Recommended';
+      card.prepend(badge);
       card.classList.add('ai-shortlist');
-      const b = document.createElement('div');
-      b.className = 'ai-top-badge'; b.textContent = '⭐ AI Recommended';
-      card.prepend(b);
     }
   });
 };

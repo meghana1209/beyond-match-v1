@@ -1,6 +1,5 @@
 /* =========================================================
    FIREBASE IMPORTS
-   Firestore operations used for candidate and job handling
 ========================================================= */
 import {
   collection,
@@ -14,74 +13,68 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-import { analytics } from "./auth.js";
-import { logEvent } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
-
-const db = window.db;
-const auth = window.auth;
-
+import { analytics }       from "./auth.js";
+import { logEvent }        from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { callGemini, isGeminiAvailable } from "./gemini.js";
+
+// These are intentionally read lazily so that if auth.js sets window.db /
+// window.auth slightly after this module parses (both are type=module and
+// execute in order, but async Firebase init can still race), all downstream
+// code picks up the live values rather than an undefined snapshot.
+let db   = window.db   || null;
+let auth = window.auth || null;
+// Refresh once the DOM is ready — by then auth.js has definitely run
+document.addEventListener("DOMContentLoaded", () => {
+  if (!db)   db   = window.db   || db;
+  if (!auth) auth = window.auth || auth;
+}, { once: true });
+
+const API_BASE = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
 
 
 /* =========================================================
    ROLE INFERENCE
-   Detects candidate role using resume keywords
+   Detects a candidate's likely role from resume keywords.
 ========================================================= */
 function inferRoleFromResume(text = "") {
   const t = text.toLowerCase();
 
   const ROLE_KEYWORDS = {
-    "Backend Developer": ["backend", "node", "django", "flask", "api", "database", "express"],
-    "Frontend Developer": ["frontend", "html", "css", "react", "ui"],
-    "Full Stack Developer": ["full stack", "mern", "frontend", "backend"],
-    "Software Engineer": ["software engineer", "java", "javascript"],
-    "Data Scientist": ["machine learning", "deep learning", "statistics", "model"],
-    "Data Analyst": ["data analyst", "power bi", "tableau", "excel", "analytics"],
-    "DevOps Engineer": ["docker", "kubernetes", "aws", "ci/cd"],
-    "AI Engineer": ["nlp", "computer vision", "llm"]
+    "Backend Developer":    ["backend", "node", "django", "flask", "api", "database", "express"],
+    "Frontend Developer":   ["frontend", "html", "css", "react", "ui"],
+    "Full Stack Developer":  ["full stack", "mern", "frontend", "backend"],
+    "Software Engineer":    ["software engineer", "java", "javascript"],
+    "Data Scientist":       ["machine learning", "deep learning", "statistics", "model"],
+    "Data Analyst":         ["data analyst", "power bi", "tableau", "excel", "analytics"],
+    "DevOps Engineer":      ["docker", "kubernetes", "aws", "ci/cd"],
+    "AI Engineer":          ["nlp", "computer vision", "llm"]
   };
 
-  let bestRole = "General";
-  let maxScore = 0;
-
+  let bestRole = "General", maxScore = 0;
   for (const role in ROLE_KEYWORDS) {
-    let score = 0;
-    ROLE_KEYWORDS[role].forEach(k => {
-      if (t.includes(k)) score++;
-    });
-
-    if (score > maxScore) {
-      maxScore = score;
-      bestRole = role;
-    }
+    const score = ROLE_KEYWORDS[role].filter(k => t.includes(k)).length;
+    if (score > maxScore) { maxScore = score; bestRole = role; }
   }
-
   return bestRole;
 }
 
 
 /* =========================================================
    UPLOAD CANDIDATE
-   Sends candidate to backend and stores metadata in Firestore
+   Posts candidate to backend then writes metadata to Firestore.
 ========================================================= */
 async function uploadCandidate(name, email, resumeText) {
   const res = await apiFetch("/candidates", {
     method: "POST",
-    body: JSON.stringify({
-      name,
-      email,
-      resume_text: resumeText || ""
-    })
+    body:   JSON.stringify({ name, email, resume_text: resumeText || "" })
   });
 
   const backendCandidateId =
     res?.candidate_id ||
     (typeof res?.body === "string" && JSON.parse(res.body)?.candidate_id);
 
-  if (!backendCandidateId) {
-    throw new Error("Backend did not return candidate_id");
-  }
+  if (!backendCandidateId) throw new Error("Backend did not return candidate_id");
 
   const inferredRole = inferRoleFromResume(resumeText);
 
@@ -89,13 +82,13 @@ async function uploadCandidate(name, email, resumeText) {
     candidate_id: backendCandidateId,
     name,
     email,
-    user_id: auth.currentUser.uid,
+    user_id:      auth.currentUser.uid,
     applied_role: inferredRole,
-    createdAt: serverTimestamp()
+    createdAt:    serverTimestamp()
   });
 
   logEvent(analytics, "candidate_created", {
-    recruiter_id: auth.currentUser.uid,
+    recruiter_id:  auth.currentUser.uid,
     role_detected: inferredRole
   });
 
@@ -106,8 +99,9 @@ window.uploadCandidate = uploadCandidate;
 
 
 /* =========================================================
-   LOAD USER CANDIDATES
-   Loads only resumes uploaded by current user
+   LOAD USER'S RESUMES
+   Populates the candidate select with only resumes uploaded
+   by the current user, with the latest resume pre-selected.
 ========================================================= */
 async function loadUserCandidatesOnly() {
   const select = document.getElementById("candidateSelect");
@@ -118,62 +112,50 @@ async function loadUserCandidatesOnly() {
 
   select.innerHTML = `<option value="">Select your resume</option>`;
 
-  /* ── Fetch candidates + user doc in parallel for speed ── */
   const [snapshot, userSnap] = await Promise.all([
     getDocs(query(collection(db, "candidates"), where("user_id", "==", user.uid))),
     getDoc(doc(db, "users", user.uid)).catch(() => null)
   ]);
 
-  /* Explicit latest pointer from users doc (most authoritative) */
   const latestId = userSnap?.exists?.() ? (userSnap.data().latest_candidate_id || null) : null;
 
-  /* Collect, deduplicate */
+  // Deduplicate and sort newest first
   const seenIds = new Set();
   const userDocs = [];
-
   snapshot.forEach(docSnap => {
     if (seenIds.has(docSnap.id)) return;
     seenIds.add(docSnap.id);
     userDocs.push({ id: docSnap.id, ...docSnap.data() });
   });
-
-  /* Sort strictly by createdAt descending — newest upload always first */
   userDocs.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
-  /* Single "latest" entry: explicit pointer wins, else index 0 (newest by date) */
   const latestDocId = latestId || (userDocs[0]?.id ?? null);
-
-  /* Latest entry first, then the rest */
-  const latest = userDocs.filter(d => d.id === latestDocId);
-  const rest   = userDocs.filter(d => d.id !== latestDocId);
-  const ordered = [...latest, ...rest];
+  const ordered     = [
+    ...userDocs.filter(d => d.id === latestDocId),
+    ...userDocs.filter(d => d.id !== latestDocId)
+  ];
 
   ordered.forEach(data => {
-    const option   = document.createElement("option");
-    option.value   = data.id;
-
     const isLatest = data.id === latestDocId;
     const role     = data.applied_role || "General";
     const dateStr  = data.createdAt?.toDate
-      ? data.createdAt.toDate().toLocaleDateString("en-GB", { day:"2-digit", month:"short" })
+      ? data.createdAt.toDate().toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
       : "";
 
+    const option       = document.createElement("option");
+    option.value       = data.id;
     option.textContent = isLatest
-      ? `★ ${data.name} – ${role}${dateStr ? " (" + dateStr + ")" : ""} [Latest]`
-      : `${data.name} – ${role}${dateStr ? " (" + dateStr + ")" : ""}`;
-
+      ? `★ ${data.name} – ${role}${dateStr ? ` (${dateStr})` : ""} [Latest]`
+      : `${data.name} – ${role}${dateStr ? ` (${dateStr})` : ""}`;
     if (isLatest) option.selected = true;
 
     select.appendChild(option);
   });
-
-  /* Do NOT auto-trigger matches — user must click "View Matches" */
 }
 
 
 /* =========================================================
-   LOAD ALL CANDIDATES
-   Populates candidate dropdown from Firestore
+   LOAD ALL CANDIDATES  (admin / recruiter view)
 ========================================================= */
 async function loadCandidates() {
   const select = document.getElementById("candidateSelect");
@@ -182,32 +164,27 @@ async function loadCandidates() {
   select.innerHTML = `<option value="">Loading candidates...</option>`;
 
   const snapshot = await getDocs(collection(db, "candidates"));
-
   select.innerHTML = `<option value="">Select candidate</option>`;
 
   snapshot.forEach(docSnap => {
     const data = docSnap.data();
+    if (docSnap.id !== data.candidate_id) return; // skip duplicates
 
-    if (docSnap.id !== data.candidate_id) return;
-
-    const option = document.createElement("option");
-    option.value = docSnap.id;
+    const option       = document.createElement("option");
+    option.value       = docSnap.id;
     option.textContent = data.name;
     select.appendChild(option);
   });
 }
 
 
-import { callGemini, isGeminiAvailable } from "./gemini.js";
-
 /* =========================================================
    LLM ENRICHMENT — CANDIDATE SIDE
-   Reranks matches and adds a "why this fits you" insight
+   Re-ranks matches and adds a "why this fits you" insight.
+   Cached in sessionStorage so it survives page re-renders.
 ========================================================= */
-// Cache: candidate_id → enriched LLM results array
-// Uses sessionStorage so results survive page re-renders within the same tab
 const llmMatchCache = {
-  _key: (k) => `llmCache_v3_${k}`,
+  _key: k => `llmCache_v3_${k}`,
   get(k) {
     if (!k) return null;
     try {
@@ -217,62 +194,64 @@ const llmMatchCache = {
   },
   set(k, v) {
     if (!k) return;
-    try { sessionStorage.setItem(this._key(k), JSON.stringify(v)); } catch { /* storage full — silent */ }
+    try { sessionStorage.setItem(this._key(k), JSON.stringify(v)); } catch { /* storage full */ }
   }
 };
 
 async function enrichMatchesWithLLM(matches, allJobs, cacheKey) {
-
-  // Return cached result if same candidate was already enriched
-  if (cacheKey && llmMatchCache.get(cacheKey)) {
-    console.log("LLM match cache hit:", cacheKey);
-    return llmMatchCache.get(cacheKey);
+  if (cacheKey) {
+    const cached = llmMatchCache.get(cacheKey);
+    // Skip cache if it's a stale failed run where every insight is null
+    if (cached && cached.some(r => r.ai_insight !== null)) return cached;
   }
 
-  // Only top 10 to LLM — smaller payload = faster + better quality
   const top10 = matches.slice(0, 10);
-  const slim = top10.map((m, i) => {
+  const slim  = top10.map((m, i) => {
     const job = allJobs.find(j => j.job_id === m.job_id) || {};
     return {
-      index: i,
-      job_id: m.job_id,
-      title: m.title || job.title || "Unknown",
-      jd_snippet: (job.description || "").slice(0, 200),
+      index:         i,
+      job_id:        m.job_id,
+      title:         m.title || job.title || "Unknown",
+      jd_snippet:    (job.description || m.description || m.jd || "").slice(0, 200),
       match_percent: m.match_percent
     };
   });
 
-  // Debug: log how many jobs have JD snippets
-  const withJD = slim.filter(s => s.jd_snippet && s.jd_snippet.length > 20).length;
-  console.log(`[LLM] ${slim.length} jobs sent, ${withJD} have JD snippets`);
-
   const prompt = `You are a career advisor helping a candidate understand their job matches.
 For each job write ONE short sentence (max 14 words) telling the candidate something specific about why this role could suit them.
 Rules:
-- Read jd_snippet carefully — mention what the role actually involves (e.g. "building data pipelines", "designing React interfaces", "managing cloud deployments")
-- If jd_snippet is empty, infer from the job title what the role involves
+- Read jd_snippet carefully — mention what the role actually involves
+- If jd_snippet is empty, infer from the job title
 - NEVER use: "high match", "great fit", "strong match", "relevant experience", "aligns with your background"
 - Each sentence must be unique and specific to that job
+- NEVER return null for ai_insight — always write something based on the title if nothing else
 - Re-rank by match_percent descending (higher % = ai_rank 1)
 Return ONLY a raw JSON array, no markdown:
 [{"index":<n>,"job_id":"...","ai_rank":<n>,"ai_insight":"<one specific sentence about this role>"}]
 
 Jobs:
 ${JSON.stringify(slim)}`;
+
   try {
     const raw = await Promise.race([
       callGemini(prompt),
-      new Promise(resolve => setTimeout(() => resolve(""), 8000))
+      new Promise(resolve => setTimeout(() => resolve(""), 12000))
     ]);
-    if (!raw) return matches.map((m, i) => ({ job_id: m.job_id, ai_rank: i + 1, ai_insight: null }));
 
-    const clean = raw.replace(/```json|```/g, "").trim();
+    if (!raw) return matches.map((m, i) => {
+      const job = allJobs.find(j => j.job_id === m.job_id) || {};
+      const title = m.title || job.title || "this role";
+      return { job_id: m.job_id, ai_rank: i + 1, ai_insight: `Focuses on ${title.toLowerCase()} responsibilities and related skills.` };
+    });
+
+    const clean   = raw.replace(/```json|```/g, "").trim();
     const jsonStr = clean.match(/\[[\s\S]*\]/)?.[0] || clean;
-    const parsed = JSON.parse(jsonStr);
+    const parsed  = JSON.parse(jsonStr);
+
     const byJobId = {}, byIndex = {};
     parsed.forEach(r => {
-      if (r.job_id) byJobId[r.job_id] = r;
-      if (r.index != null) byIndex[r.index] = r;
+      if (r.job_id)     byJobId[r.job_id] = r;
+      if (r.index != null) byIndex[r.index]  = r;
     });
 
     const result = matches.map((m, i) => {
@@ -283,71 +262,66 @@ ${JSON.stringify(slim)}`;
     if (cacheKey) llmMatchCache.set(cacheKey, result);
     return result;
 
-  } catch (err) {
-    console.warn("LLM enrichment failed, showing matches without AI:", err);
-    return matches.map((m, i) => ({ job_id: m.job_id, ai_rank: i + 1, ai_insight: null }));
+  } catch {
+    return matches.map((m, i) => {
+      const job = allJobs.find(j => j.job_id === m.job_id) || {};
+      const title = m.title || job.title || "this role";
+      return { job_id: m.job_id, ai_rank: i + 1, ai_insight: `Focuses on ${title.toLowerCase()} responsibilities and related skills.` };
+    });
   }
 }
 
 
 /* =========================================================
-   RESOLVE LOCAL ID TO BACKEND ID
-   If a candidate only has a local_ Firestore ID (backend
-   registration failed at signup), register them now and
-   update Firestore with the real backend candidate_id.
+   RESOLVE LOCAL ID → BACKEND ID
+   If signup failed to reach the backend, the candidate has a
+   "local_<uid>" placeholder ID. This function registers them
+   and migrates their Firestore documents to the real ID.
 ========================================================= */
-const API_BASE = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
-
 async function resolveToBackendId(localId) {
   if (!localId.startsWith("local_")) return localId;
 
-  console.log("🔄 local_ ID detected, registering with backend:", localId);
-
   const snap = await getDoc(doc(db, "candidates", localId));
-  if (!snap.exists()) { console.error("Candidate doc not found:", localId); return localId; }
+  if (!snap.exists()) return localId;
 
-  const data = snap.data();
+  const data       = snap.data();
   const resumeText = data.resume_text || "";
-
-  if (!resumeText.trim()) {
-    console.warn("⚠️ No resume_text in doc. Go to Resume Analysis and upload first.");
-    return localId;
-  }
+  if (!resumeText.trim()) return localId; // nothing to register without a resume
 
   try {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 8000);
+
     const res = await fetch(`${API_BASE}/candidates`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       signal:  controller.signal,
-      body: JSON.stringify({
+      body:    JSON.stringify({
         name:        data.name || data.email?.split("@")[0] || "candidate",
         email:       data.email,
         resume_text: resumeText
       })
     });
-    const raw = await res.text();
+
     let parsed = {};
-    try { parsed = JSON.parse(raw); } catch(e) {}
-    const backendId = parsed?.candidate_id
-      || (typeof parsed?.body === "string"
-          ? (() => { try { return JSON.parse(parsed.body)?.candidate_id; } catch(e) { return null; } })()
-          : null);
+    try { parsed = JSON.parse(await res.text()); } catch { }
 
-    if (!backendId) { console.warn("Backend gave no candidate_id, raw:", raw); return localId; }
+    const backendId =
+      parsed?.candidate_id ||
+      (typeof parsed?.body === "string"
+        ? (() => { try { return JSON.parse(parsed.body)?.candidate_id; } catch { return null; } })()
+        : null);
 
-    /* Migrate: write real-ID doc, update users doc, delete old local_ doc */
+    if (!backendId) return localId;
+
+    // Migrate to real ID
     const user = auth.currentUser;
-    await setDoc(doc(db, "candidates", backendId), {
-      ...data, candidate_id: backendId, is_latest: true, createdAt: serverTimestamp()
-    });
+    await setDoc(doc(db, "candidates", backendId), { ...data, candidate_id: backendId, is_latest: true, createdAt: serverTimestamp() });
     if (user) {
-      await setDoc(doc(db, "users", user.uid),
-        { candidate_id: backendId, latest_candidate_id: backendId }, { merge: true });
+      await setDoc(doc(db, "users", user.uid), { candidate_id: backendId, latest_candidate_id: backendId }, { merge: true });
     }
-    try { await deleteDoc(doc(db, "candidates", localId)); } catch(e) {}
-    console.log("✅ Migrated:", localId, "→", backendId);
+    try { await deleteDoc(doc(db, "candidates", localId)); } catch { }
+
     return backendId;
 
   } catch (err) {
@@ -358,8 +332,7 @@ async function resolveToBackendId(localId) {
 
 
 /* =========================================================
-   LOAD JOB MATCHES
-   Fetches raw matches, enriches via Gemini, then renders
+   JOB MATCH SKELETON LOADERS
 ========================================================= */
 function _jobMatchSkeleton() {
   return `
@@ -393,23 +366,28 @@ function _jobMatchSkeleton() {
 
 function _showJobMatchSkeletons(grid, count = 8) {
   if (!grid) return;
-  grid.innerHTML = Array(count).fill(null).map(_jobMatchSkeleton).join('');
+  grid.innerHTML = Array(count).fill(null).map(_jobMatchSkeleton).join("");
 }
 
+
+/* =========================================================
+   LOAD JOB MATCHES
+   Fetches raw matches, enriches via Gemini, then renders.
+   Also caches matched job IDs for LocateHire to consume.
+========================================================= */
 async function loadCandidateJobMatches() {
-  const select = document.getElementById("candidateSelect");
+  const select      = document.getElementById("candidateSelect");
   const candidateId = select?.value;
-  const grid = document.getElementById("matchesGrid");
+  const grid        = document.getElementById("matchesGrid");
 
   if (!candidateId) {
     if (window.showToast) showToast("Please select a resume first.", "warning");
     return;
   }
 
-  // Show skeleton immediately — before any async work
   _showJobMatchSkeletons(grid, 8);
 
-  /* Resolve local_ placeholder to real backend ID before calling /matches */
+  // Ensure local placeholder ID is migrated to a real backend ID before matching
   const resolvedId = await resolveToBackendId(candidateId);
   if (resolvedId !== candidateId) {
     const opt = select.querySelector(`option[value="${candidateId}"]`);
@@ -432,48 +410,38 @@ async function loadCandidateJobMatches() {
     return;
   }
 
-  /* ── Fetch matches AND jobs in parallel — cuts load time ~50% ── */
-  // top_n=50 — MUST match the value used in locatehire.js so both pages highlight the same jobs
+  // Fetch matches and all jobs in parallel — cuts load time ~50%
   const [res, jobsRes] = await Promise.all([
     apiFetch(`/matches?candidate_id=${resolvedId}&top_n=50&offset=0`),
     apiFetch("/jobs")
   ]);
 
-  let data = res;
-
-  if (typeof res?.body === "string") {
-    data = JSON.parse(res.body);
-  }
-
-  const matches = Array.isArray(data)
-    ? data
-    : data.matches || [];
+  let data    = typeof res?.body === "string" ? JSON.parse(res.body) : res;
+  const matches = Array.isArray(data) ? data : (data.matches || []);
 
   if (!matches.length) {
     grid.innerHTML = `
       <div class="empty-state">
         <h4>No matches found</h4>
-        <p>We couldn’t find any suitable jobs for this candidate right now.</p>
-      </div>
-    `;
+        <p>We couldn't find any suitable jobs for this candidate right now.</p>
+      </div>`;
     return;
   }
 
-  // Cache matched job IDs in sessionStorage so LocateHire reads the same set
-  // without a second API call — keeps both pages perfectly in sync
+  // Share matched job IDs with LocateHire (avoids a second API call there)
   try {
     sessionStorage.setItem("bm_matched_job_ids", JSON.stringify(matches.map(m => String(m.job_id))));
-  } catch {}
+  } catch { }
 
   let allJobs = Array.isArray(jobsRes)
     ? jobsRes
     : (() => { try { return JSON.parse(jobsRes?.body || "[]"); } catch { return []; } })();
 
-  // ── GEMINI RERANK + INSIGHT ──
   const llmResults = await enrichMatchesWithLLM(matches, allJobs, candidateId);
-  const llmMap = {};
+  const llmMap     = {};
   llmResults.forEach(r => { llmMap[r.job_id] = r; });
 
+  // Sort by AI rank
   const ranked = [...matches].sort((a, b) => {
     const ra = llmMap[a.job_id]?.ai_rank ?? 999;
     const rb = llmMap[b.job_id]?.ai_rank ?? 999;
@@ -483,13 +451,10 @@ async function loadCandidateJobMatches() {
   grid.innerHTML = "";
 
   ranked.forEach((match, idx) => {
-    const job = allJobs.find(j => j.job_id === match.job_id) || match || {};
-
-    const location =
-      job.location_display || job.location ||
+    const job      = allJobs.find(j => j.job_id === match.job_id) || match || {};
+    const location = job.location_display || job.location ||
       (job.city && job.country ? `${job.city}, ${job.country}` : job.city || job.country || "Not specified");
-
-    const company = job.company || match.company || "Company not available";
+    const company  = job.company || match.company || "Company not available";
 
     let salary = "Salary not disclosed";
     if (job.salary_min && job.salary_max) {
@@ -500,11 +465,10 @@ async function loadCandidateJobMatches() {
       salary = `Up to $${Math.round(job.salary_max).toLocaleString()}`;
     }
 
-    const percent = match.match_percent != null ? match.match_percent.toFixed(1) : "0.0";
+    const percent   = match.match_percent != null ? match.match_percent.toFixed(1) : "0.0";
     const aiInsight = llmMap[match.job_id]?.ai_insight;
     const isTopPick = idx === 0;
 
-    // Store full job data for Know More modal
     const cardData = {
       job_id:      job.job_id || match.job_id,
       title:       match.title || job.title || "Job Title",
@@ -516,14 +480,11 @@ async function loadCandidateJobMatches() {
       apply_url:   job.apply_url || match.apply_url || ""
     };
 
-    // ── Match ring geometry ──
+    // Match ring geometry (SVG circle, r=18, circumference≈113)
     const pct      = parseFloat(percent);
-    const circ     = 113; // 2π × r(18)
+    const circ     = 113;
     const offset   = circ - (pct / 100) * circ;
-    let ringColor  = '#f87171';
-    if (pct >= 80)      ringColor = '#4ade80';
-    else if (pct >= 60) ringColor = '#7aa2ff';
-    else if (pct >= 40) ringColor = '#fbbf24';
+    const ringColor = pct >= 80 ? "#4ade80" : pct >= 60 ? "#7aa2ff" : pct >= 40 ? "#fbbf24" : "#f87171";
 
     grid.innerHTML += `
       <div class="match-card ${isTopPick ? "top-pick" : ""}"
@@ -540,7 +501,6 @@ async function loadCandidateJobMatches() {
             <div class="match-card-title">${cardData.title}</div>
             <div class="match-card-company">${company}</div>
           </div>
-
           <div class="match-pct">
             <div class="match-ring">
               <svg viewBox="0 0 40 40">
@@ -572,7 +532,7 @@ async function loadCandidateJobMatches() {
         ${aiInsight ? `<div class="match-insight">✦ ${aiInsight}</div>` : ""}
 
         <div class="match-actions">
-          <button class="match-btn apply" onclick='openApplyLink("${cardData.apply_url || '#'}")'>
+          <button class="match-btn apply" onclick='openApplyLink("${cardData.apply_url || "#"}")'>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
@@ -591,84 +551,62 @@ async function loadCandidateJobMatches() {
             Know More
           </button>
         </div>
-
       </div>
     `;
 
-    window.__jobCardData = window.__jobCardData || {};
+    window.__jobCardData          = window.__jobCardData || {};
     window.__jobCardData[cardData.job_id] = { ...cardData, candidateId };
   });
 
   setupMatchFilters();
   setupKnowMoreButtons(candidateId);
-
-  document.querySelectorAll(".apply-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const url = btn.getAttribute("data-url");
-      if (!url) { if (window.showToast) showToast("No application link available for this job.", "warning"); return; }
-      window.open(url, "_blank", "noopener,noreferrer");
-    });
-  });
 }
-
-
-
 
 
 /* =========================================================
    MATCH FILTERS
-   Handles filtering and sorting of matched jobs
+   Filters visible job cards by location and minimum match
+   percentage; sorts by salary.
 ========================================================= */
 function setupMatchFilters() {
-
   const locationFilter = document.getElementById("locationFilter");
-  const matchFilter = document.getElementById("matchFilter");
-  const salarySort = document.getElementById("salarySort");
-
+  const matchFilter    = document.getElementById("matchFilter");
+  const salarySort     = document.getElementById("salarySort");
   if (!locationFilter) return;
 
   const cards = () => document.querySelectorAll(".match-card");
 
+  // Populate location dropdown from card data
   const locations = new Set();
   cards().forEach(c => locations.add(c.dataset.location));
-
   locationFilter.innerHTML =
     `<option value="">All Locations</option>` +
     [...locations].map(l => `<option value="${l}">${l}</option>`).join("");
 
   function applyFilters() {
-
-    const loc = locationFilter.value;
+    const loc      = locationFilter.value;
     const minMatch = matchFilter.value;
 
     cards().forEach(card => {
-
-      let visible = true;
-
-      if (loc && card.dataset.location !== loc) visible = false;
-      if (minMatch && Number(card.dataset.match) < Number(minMatch)) visible = false;
-
+      const visible =
+        (!loc      || card.dataset.location === loc) &&
+        (!minMatch || Number(card.dataset.match) >= Number(minMatch));
       card.style.display = visible ? "block" : "none";
     });
 
     if (salarySort.value) {
+      const grid   = document.getElementById("matchesGrid");
       const sorted = [...cards()].sort((a, b) => {
-        const aSalary = Number(a.dataset.salary);
-        const bSalary = Number(b.dataset.salary);
-
-        return salarySort.value === "high"
-          ? bSalary - aSalary
-          : aSalary - bSalary;
+        const diff = Number(a.dataset.salary) - Number(b.dataset.salary);
+        return salarySort.value === "high" ? -diff : diff;
       });
-
-      const grid = document.getElementById("matchesGrid");
       sorted.forEach(card => grid.appendChild(card));
     }
   }
 
   locationFilter.onchange = applyFilters;
-  matchFilter.onchange = applyFilters;
-  salarySort.onchange = applyFilters;
+  matchFilter.onchange    = applyFilters;
+  salarySort.onchange     = applyFilters;
 }
 
 window.loadCandidateJobMatches = loadCandidateJobMatches;
@@ -676,30 +614,28 @@ window.loadCandidateJobMatches = loadCandidateJobMatches;
 
 /* =========================================================
    AUTH LISTENER
-   Loads user candidates after login
+   Loads the user's resumes once they are authenticated.
 ========================================================= */
+// Use window.auth directly here (not the cached `auth` const) so it's
+// guaranteed to be the live Firebase Auth instance even on first load.
 onAuthStateChanged(window.auth, (user) => {
   if (!user) return;
-
   const select = document.getElementById("candidateSelect");
   if (!select) return;
-
   loadUserCandidatesOnly();
 });
 
 
 /* =========================================================
    SAVE JOB
-   Saves shortlisted job to Firestore
+   Persists a shortlisted job to Firestore and tracks the
+   interaction with the backend analytics endpoint.
 ========================================================= */
 async function saveJobToFirebase(job, candidateId) {
-
   const user = auth.currentUser;
   if (!user) return;
 
-  /* ===== SAFE CHECK FIRST ===== */
-  if (!job || !job.job_id) {
-    console.error("Invalid job object:", job);
+  if (!job?.job_id) {
     if (window.showToast) showToast("Job data is missing. Please try again.", "error");
     return;
   }
@@ -707,67 +643,59 @@ async function saveJobToFirebase(job, candidateId) {
   const docId = `${user.uid}_${candidateId}_${job.job_id}`;
 
   await setDoc(doc(db, "saved_jobs", docId), {
-    user_id: user.uid,
+    user_id:      user.uid,
     candidate_id: candidateId,
-    job_id: job.job_id,
-    title: job.title || "Untitled Job",
-    company: job.company || "Company not available",
+    job_id:       job.job_id,
+    title:        job.title    || "Untitled Job",
+    company:      job.company  || "Company not available",
     location:
-      job.location_display ||
-      job.location ||
-      (job.city && job.country
-        ? `${job.city}, ${job.country}`
-        : "Location not specified"),
-    salary_min: job.salary_min ?? null,
-    salary_max: job.salary_max ?? null,
-    description: job.description || "",
-    apply_url: job.apply_url || "#",
-    savedAt: serverTimestamp()
+      job.location_display || job.location ||
+      (job.city && job.country ? `${job.city}, ${job.country}` : "Location not specified"),
+    salary_min:   job.salary_min ?? null,
+    salary_max:   job.salary_max ?? null,
+    description:  job.description || "",
+    apply_url:    job.apply_url || "#",
+    savedAt:      serverTimestamp()
   });
 
-  trackInteraction({
-    job_id: job.job_id,
-    candidate_id: candidateId,
-    action: "shortlist"
-  });
+  trackInteraction({ job_id: job.job_id, candidate_id: candidateId, action: "shortlist" });
 
   if (window.showToast) showToast("Job saved to your list.", "success");
 }
 
+
 /* =========================================================
-   TRACK INTERACTION
-   Sends interaction data to backend analytics endpoint
+   INTERACTION TRACKING
+   Sends candidate interaction events to the backend.
 ========================================================= */
 async function trackInteraction({ job_id, candidate_id, action }) {
   try {
-    await fetch(
-      "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod/trackInteraction",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          job_id,
-          candidate_id,
-          action
-        })
-      }
-    );
+    await fetch(`${API_BASE}/trackInteraction`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ job_id, candidate_id, action })
+    });
   } catch (err) {
     console.warn("Interaction tracking failed:", err);
   }
 }
-function openApplyLink(url) {
 
+
+/* =========================================================
+   OPEN APPLY LINK
+========================================================= */
+function openApplyLink(url) {
   if (!url || url === "#" || url.trim() === "") {
     if (window.showToast) showToast("No application link available for this job.", "warning");
     return;
   }
-
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+
 /* =========================================================
-   SAVE BUTTON HANDLER — styled feedback, no alert
+   SAVE BUTTON HANDLER
+   Provides visual feedback after saving — no alert.
 ========================================================= */
 async function handleSaveJob(btn, job, candidateId) {
   if (btn.dataset.saved) return;
@@ -780,30 +708,34 @@ async function handleSaveJob(btn, job, candidateId) {
         <polyline points="20 6 9 17 4 12"/>
       </svg>
       Saved`;
-  } catch(e) {
+  } catch (e) {
     console.error("Save failed:", e);
   }
 }
+
 window.handleSaveJob = handleSaveJob;
+
 
 /* =========================================================
    GLOBAL EXPORTS
 ========================================================= */
 window.loadCandidateJobMatches = loadCandidateJobMatches;
-window.saveJobToFirebase = saveJobToFirebase;
-window.openApplyLink = openApplyLink;
+window.saveJobToFirebase       = saveJobToFirebase;
+window.openApplyLink           = openApplyLink;
+
 
 /* =========================================================
-   KNOW MORE MODAL — JD ANALYSIS + PREP TIPS
+   KNOW MORE MODAL
+   Shows an AI-generated breakdown of the job — summary,
+   responsibilities, and personalised prep tips.
+   Triggered by "Know More" buttons on match cards.
 ========================================================= */
-
-// Cache: job_id → modal analysis result
-const knowMoreCache = {};
+const knowMoreCache = {}; // job_id → parsed LLM result
 
 function setupKnowMoreButtons(candidateId) {
   document.querySelectorAll(".know-more-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const jobId = btn.getAttribute("data-jobid");
+      const jobId  = btn.getAttribute("data-jobid");
       const jobData = window.__jobCardData?.[jobId];
       if (!jobData) return;
       openKnowMoreModal(jobData, candidateId);
@@ -813,10 +745,10 @@ function setupKnowMoreButtons(candidateId) {
 
 async function openKnowMoreModal(jobData, candidateId) {
 
-  // Inject modal + overlay if not already in DOM
+  // Inject modal once
   if (!document.getElementById("knowMoreOverlay")) {
     const overlay = document.createElement("div");
-    overlay.id = "knowMoreOverlay";
+    overlay.id    = "knowMoreOverlay";
     overlay.style.cssText = `
       position:fixed; inset:0; background:rgba(0,0,0,0.75);
       backdrop-filter:blur(6px); z-index:1000;
@@ -829,35 +761,26 @@ async function openKnowMoreModal(jobData, candidateId) {
         border-radius:16px; width:100%; max-width:680px;
         max-height:85vh; overflow-y:auto;
         padding:32px; box-sizing:border-box;
-        position:relative; color:#f9fafb;
-        font-family:inherit;
+        position:relative; color:#f9fafb; font-family:inherit;
       ">
         <button id="knowMoreClose" style="
           position:absolute; top:16px; right:18px;
           background:none; border:none; color:#9ca3af;
           font-size:22px; cursor:pointer; line-height:1;
         ">&#x2715;</button>
-
         <div id="knowMoreContent"></div>
       </div>
     `;
     document.body.appendChild(overlay);
-
-    // Close on overlay click or X button
-    overlay.addEventListener("click", e => {
-      if (e.target === overlay) overlay.style.display = "none";
-    });
-    document.getElementById("knowMoreClose").addEventListener("click", () => {
-      overlay.style.display = "none";
-    });
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.style.display = "none"; });
+    document.getElementById("knowMoreClose").addEventListener("click", () => { overlay.style.display = "none"; });
   }
 
-  const overlay  = document.getElementById("knowMoreOverlay");
-  const content  = document.getElementById("knowMoreContent");
+  const overlay = document.getElementById("knowMoreOverlay");
+  const content = document.getElementById("knowMoreContent");
   overlay.style.display = "flex";
 
-  // Show title + spinner while loading
-  const descSnippet = (jobData.description || "").slice(0, 80).replace(/</g,"&lt;");
+  // Show spinner while loading
   content.innerHTML = `
     <div style="margin-bottom:20px;">
       <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Job Breakdown</div>
@@ -875,7 +798,6 @@ async function openKnowMoreModal(jobData, candidateId) {
     <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
   `;
 
-  // Return cached result instantly
   if (knowMoreCache[jobData.job_id]) {
     renderKnowMoreResult(content, jobData, knowMoreCache[jobData.job_id]);
     return;
@@ -886,10 +808,8 @@ async function openKnowMoreModal(jobData, candidateId) {
   try {
     const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
     const snap = await getDoc(doc(window.db, "candidates", candidateId));
-    if (snap.exists()) {
-      resumeSnippet = (snap.data().resume_text || "").slice(0, 800);
-    }
-  } catch (e) { /* no resume available */ }
+    if (snap.exists()) resumeSnippet = (snap.data().resume_text || "").slice(0, 800);
+  } catch { }
 
   const prompt = `You are a career coach helping a candidate understand a job and prepare for it.
 
@@ -915,36 +835,34 @@ Return ONLY a raw JSON object, no markdown, no backticks:
 
   try {
     const { callGemini } = await import("./gemini.js");
-
     let parsed = null;
+
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const raw = await callGemini(attempt === 0 ? prompt : prompt); // same prompt, fresh call bypasses cache on retry
-        if (!raw || !raw.trim()) throw new Error("Empty LLM response");
+        const raw = await callGemini(prompt);
+        if (!raw?.trim()) throw new Error("Empty LLM response");
         const clean   = raw.replace(/```json|```/g, "").trim();
         const jsonStr = clean.match(/\{[\s\S]*\}/)?.[0] || clean;
         parsed = JSON.parse(jsonStr);
-        break; // success — stop retrying
-      } catch (retryErr) {
+        break;
+      } catch {
         if (attempt === 0) {
-          // Show a subtle "retrying…" message without clearing the header
-          const retryNote = document.createElement("p");
-          retryNote.id = "kmRetryNote";
-          retryNote.style.cssText = "color:#9ca3af;font-size:12px;margin-top:8px;";
-          retryNote.textContent = "Taking longer than usual, retrying…";
-          content.appendChild(retryNote);
+          const note = document.createElement("p");
+          note.id         = "kmRetryNote";
+          note.style.cssText = "color:#9ca3af;font-size:12px;margin-top:8px;";
+          note.textContent   = "Taking longer than usual, retrying…";
+          content.appendChild(note);
           await new Promise(r => setTimeout(r, 1500));
           document.getElementById("kmRetryNote")?.remove();
         } else {
-          throw retryErr; // both attempts failed — surface the error
+          throw new Error("Both LLM attempts failed");
         }
       }
     }
 
     knowMoreCache[jobData.job_id] = parsed;
     renderKnowMoreResult(content, jobData, parsed);
-  } catch (err) {
-    console.warn("Know More LLM failed:", err);
+  } catch {
     content.innerHTML += `
       <p style="color:#ef4444;font-size:13px;margin-top:12px;">
         Analysis failed — please close and try again.
@@ -953,18 +871,17 @@ Return ONLY a raw JSON object, no markdown, no backticks:
 }
 
 function renderKnowMoreResult(content, jobData, data) {
-
   const tipsHTML = (data.tips || []).map((t, i) => `
     <div style="
-      display:flex;gap:14px;align-items:flex-start;
-      padding:12px 14px;background:#0d1117;
-      border-radius:10px;border:1px solid #1f2937;
+      display:flex; gap:14px; align-items:flex-start;
+      padding:12px 14px; background:#0d1117;
+      border-radius:10px; border:1px solid #1f2937;
     ">
       <div style="
-        min-width:26px;height:26px;border-radius:50%;
+        min-width:26px; height:26px; border-radius:50%;
         background:linear-gradient(135deg,#4f46e5,#a78bfa);
-        display:flex;align-items:center;justify-content:center;
-        font-size:12px;font-weight:700;color:#fff;flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        font-size:12px; font-weight:700; color:#fff; flex-shrink:0;
       ">${i + 1}</div>
       <div>
         <div style="font-weight:600;font-size:13px;color:#f9fafb;margin-bottom:3px;">${t.title}</div>
@@ -978,46 +895,39 @@ function renderKnowMoreResult(content, jobData, data) {
   `).join("");
 
   content.innerHTML = `
-    <!-- Header -->
     <div style="margin-bottom:22px;">
       <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Job Breakdown</div>
       <h2 style="margin:0 0 4px;font-size:20px;color:#f9fafb;">${jobData.title}</h2>
       <p style="margin:0;color:#9ca3af;font-size:14px;">${jobData.company} &nbsp;·&nbsp; ${jobData.location} &nbsp;·&nbsp; ${jobData.salary}</p>
     </div>
 
-    <!-- Divider -->
     <div style="height:1px;background:#1f2937;margin-bottom:20px;"></div>
 
-    <!-- Summary -->
     <div style="margin-bottom:20px;">
       <div style="font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">About the Role</div>
       <p style="color:#d1d5db;font-size:14px;line-height:1.6;margin:0;">${data.summary || ""}</p>
     </div>
 
-    <!-- What you'll do -->
     ${doHTML ? `
     <div style="margin-bottom:22px;">
       <div style="font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">What You'll Do</div>
       <ul style="margin:0;padding-left:18px;">${doHTML}</ul>
     </div>` : ""}
 
-    <!-- Divider -->
     <div style="height:1px;background:#1f2937;margin-bottom:20px;"></div>
 
-    <!-- Prep Tips -->
     <div style="margin-bottom:24px;">
       <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">✨ How to Prepare</div>
       <div style="display:flex;flex-direction:column;gap:10px;">${tipsHTML}</div>
     </div>
 
-    <!-- Apply CTA -->
     ${jobData.apply_url ? `
     <a href="${jobData.apply_url}" target="_blank" rel="noopener noreferrer" style="
-      display:block;text-align:center;
+      display:block; text-align:center;
       background:linear-gradient(135deg,#4f46e5,#a78bfa);
-      color:#fff;font-weight:600;font-size:14px;
-      padding:13px 24px;border-radius:10px;
-      text-decoration:none;margin-top:4px;
+      color:#fff; font-weight:600; font-size:14px;
+      padding:13px 24px; border-radius:10px;
+      text-decoration:none; margin-top:4px;
     ">Apply for this Role →</a>` : ""}
   `;
 }

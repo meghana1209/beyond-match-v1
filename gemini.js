@@ -1,7 +1,12 @@
+/* =========================================================
+   GEMINI / LLM CLIENT
+   Thin wrapper around the backend /llm endpoint.
+   Named "callGemini" for backward compatibility.
+========================================================= */
 
 const LLM_ENDPOINT = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod/llm";
 
-/* ── Prompt cache (in-memory, cleared on page reload) ── */
+// In-memory prompt cache — cleared on page reload
 const _promptCache = new Map();
 
 function _hashPrompt(str) {
@@ -12,15 +17,15 @@ function _hashPrompt(str) {
   return h.toString(36);
 }
 
-/* =========================================================
-   PUBLIC: callGemini  (name kept for backward compat)
-========================================================= */
-// AFTER:
+/**
+ * Send a prompt to the LLM endpoint.
+ * Retries once after 2 s on failure. Results are cached in-memory.
+ * @param {string} prompt
+ * @returns {Promise<string>} Raw text response, or "" on failure.
+ */
 export async function callGemini(prompt) {
   const cacheKey = _hashPrompt(prompt);
-  if (_promptCache.has(cacheKey)) {
-    return _promptCache.get(cacheKey);
-  }
+  if (_promptCache.has(cacheKey)) return _promptCache.get(cacheKey);
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -31,15 +36,13 @@ export async function callGemini(prompt) {
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data   = await res.json();
         const result = data?.result || "";
         if (result) _promptCache.set(cacheKey, result);
         return result;
       }
 
-      // 504 or other server error — retry once after 2s
       if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
-
     } catch {
       if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
     }
@@ -48,9 +51,6 @@ export async function callGemini(prompt) {
   return "";
 }
 
-/* =========================================================
-   PUBLIC: isGeminiAvailable
-========================================================= */
 export function isGeminiAvailable() {
   return true;
 }
