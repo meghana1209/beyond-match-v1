@@ -709,6 +709,7 @@ select option { background: #111827; }
     <a href="jobmatches.html"          class="cand-menu-item active">Job Matches</a>
     <a href="savedjobs.html"           class="cand-menu-item">Saved Jobs</a>
     <a href="locatehire.html"          class="cand-menu-item">LocateHire</a>
+        <a href="cand_actions.html"          class="cand-menu-item">Candidate Actions</a>
     <a href="settings.html"            class="cand-menu-item">Settings</a>
   </nav>
   <button class="logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
@@ -792,6 +793,82 @@ select option { background: #111827; }
 <script type="module" src="auth.js"></script>
 <script type="module" src="candidate.js"></script>
 <script type="module" src="api.js"></script>
+<script type="module" src="apply-job.js"></script>
 
+<!-- ════════ APPLY BUTTON FIX ════════ -->
+<script>
+// Robust apply handler — resolves apply_url from multiple possible field names
+// and falls back to a Google search so the button is never a dead end.
+window.handleApplyClick = function(btn) {
+  // Walk up to find the card's data
+  const card = btn.closest('[data-apply-url]') || btn.closest('.match-card');
+  let url = btn.dataset.applyUrl
+    || (card && (card.dataset.applyUrl || card.dataset.applicationUrl || card.dataset.jobUrl))
+    || null;
+
+  if (url && url !== 'null' && url !== 'undefined' && url.startsWith('http')) {
+    window.open(url, '_blank', 'noopener');
+  } else {
+    // Fallback: search Google for the job
+    const title   = card ? (card.dataset.title || card.querySelector('.match-card-title')?.textContent || '') : '';
+    const company = card ? (card.dataset.company || card.querySelector('.match-card-company')?.textContent || '') : '';
+    const query   = encodeURIComponent(`${title} ${company} apply job`.trim());
+    window.open(`https://www.google.com/search?q=${query}`, '_blank', 'noopener');
+  }
+};
+
+// Patch: intercept any apply button rendered by candidate.js / api.js
+// by observing DOM mutations and rewriting onclick handlers.
+(function patchApplyButtons() {
+  const grid = document.getElementById('matchesGrid');
+  if (!grid) return;
+
+  function patchCard(card) {
+    const applyBtn = card.querySelector('.match-btn.apply');
+    if (!applyBtn) return;
+
+    // Read url from the <a> href if it was rendered as a link
+    const existingHref = applyBtn.getAttribute('href');
+    const url = applyBtn.dataset.applyUrl
+      || card.dataset.applyUrl
+      || (existingHref && existingHref !== '#' ? existingHref : null)
+      || null;
+
+    // Store on card for handleApplyClick
+    if (url && url.startsWith('http')) {
+      card.dataset.applyUrl = url;
+      applyBtn.dataset.applyUrl = url;
+    }
+
+    // Replace element so we can set onclick cleanly
+    applyBtn.removeAttribute('href');
+    applyBtn.setAttribute('role', 'button');
+    applyBtn.onclick = function(e) {
+      e.preventDefault();
+      const resolvedUrl = applyBtn.dataset.applyUrl || card.dataset.applyUrl || null;
+      if (resolvedUrl && resolvedUrl.startsWith('http')) {
+        window.open(resolvedUrl, '_blank', 'noopener');
+      } else {
+        const title   = card.querySelector('.match-card-title')?.textContent || '';
+        const company = card.querySelector('.match-card-company')?.textContent || '';
+        const query   = encodeURIComponent(`${title} ${company} apply job`.trim());
+        window.open(`https://www.google.com/search?q=${query}`, '_blank', 'noopener');
+      }
+    };
+  }
+
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(m => {
+      m.addedNodes.forEach(node => {
+        if (node.nodeType !== 1) return;
+        if (node.classList?.contains('match-card')) patchCard(node);
+        node.querySelectorAll?.('.match-card').forEach(patchCard);
+      });
+    });
+  });
+
+  observer.observe(grid, { childList: true, subtree: true });
+})();
+</script>
 </body>
 </html>

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post a Job – BeyondMatch</title>
+  <link rel="stylesheet" href="recruiter-matches.css" />
+
+<style>
+/* ─── tokens ─────────────────────────────────────────── */
+:root{
+  --blue:#7aa2ff; --blue-dim:rgba(122,162,255,.10); --blue-line:rgba(122,162,255,.25);
+  --purple:#c084fc; --purple-dim:rgba(192,132,252,.10);
+  --green:#4ade80; --green-dim:rgba(74,222,128,.10);
+  --red:#f87171;
+  --text-1:#e2e8f0; --text-2:#a0aec0; --text-3:#6b7fa8;
+  --card:#0f1525; --card-border:rgba(122,162,255,.10);
+  --r-lg:14px; --r-md:10px; --r-sm:8px;
+}
+
+/* ─── progress bar ──────────────────────────────────── */
+#lbar{position:fixed;top:0;left:0;height:2px;z-index:999;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  width:0;transition:width .35s ease;}
+
+/* ─── outer shell ────────────────────────────────────── */
+.main{
+  height:100vh;
+  display:flex;flex-direction:column;
+  padding:22px 28px 16px;
+  gap:12px;
+  overflow:hidden; /* header+submit pinned; only inner panel scrolls */
+}
+
+/* ─── header ─────────────────────────────────────────── */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;flex-shrink:0;}
+.ph h1{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--text-1);margin:0;}
+.ph p{font-size:12px;color:var(--text-3);margin:3px 0 0;}
+
+/* ─── mode toggle ────────────────────────────────────── */
+.mtoggle{
+  display:inline-flex;
+  background:rgba(122,162,255,.06);
+  border:1px solid var(--card-border);
+  border-radius:30px;padding:4px;gap:3px;flex-shrink:0;
+}
+.mtab{
+  font-family:inherit;font-size:12px;font-weight:600;
+  padding:7px 16px;border-radius:24px;border:none;cursor:pointer;
+  background:transparent;color:var(--text-3);transition:all .2s;
+  display:flex;align-items:center;gap:5px;
+}
+.mtab.on{background:var(--blue-dim);border:1px solid var(--blue-line);color:var(--blue);}
+.mtab:not(.on):hover{color:var(--text-2);}
+
+/* ─── banners ────────────────────────────────────────── */
+#errBanner{
+  display:none;flex-shrink:0;
+  background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.22);
+  border-radius:var(--r-md);padding:11px 16px;font-size:13px;color:var(--red);
+}
+#okBanner{
+  display:none;flex-shrink:0;align-items:center;gap:12px;
+  background:var(--green-dim);border:1px solid rgba(74,222,128,.22);
+  border-radius:var(--r-lg);padding:14px 18px;font-size:13.5px;color:var(--green);
+}
+
+/* ─── SCROLLABLE INNER PANEL ─────────────────────────── */
+#panel{
+  flex:1;min-height:0;
+  overflow-y:auto;
+  display:flex;flex-direction:column;gap:12px;
+}
+#panel::-webkit-scrollbar{width:5px;}
+#panel::-webkit-scrollbar-track{background:transparent;}
+#panel::-webkit-scrollbar-thumb{background:rgba(122,162,255,.18);border-radius:10px;}
+
+/* ─── card ───────────────────────────────────────────── */
+.card{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:var(--r-lg);padding:20px 22px;flex-shrink:0;
+}
+.slabel{
+  font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--text-3);margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.slabel::after{content:'';flex:1;height:1px;background:rgba(122,162,255,.08);}
+
+/* ─── form grid ──────────────────────────────────────── */
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:13px 16px;}
+@media(max-width:740px){.fg{grid-template-columns:1fr;}}
+.full{grid-column:1/-1;}
+.div{height:1px;background:rgba(122,162,255,.07);grid-column:1/-1;margin:2px 0;}
+
+/* ─── field ──────────────────────────────────────────── */
+.f{display:flex;flex-direction:column;gap:5px;}
+.f label{font-size:11.5px;font-weight:600;color:var(--text-2);}
+.f label .req{color:var(--blue);margin-left:1px;}
+.f input,.f select,.f textarea{
+  background:#090e1c;border:1px solid rgba(122,162,255,.15);
+  border-radius:var(--r-sm);color:var(--text-1);
+  font-family:inherit;font-size:13.5px;
+  padding:9px 13px;outline:none;width:100%;box-sizing:border-box;
+  transition:border .18s,box-shadow .18s;
+}
+.f input::placeholder,.f textarea::placeholder{color:var(--text-3);}
+.f input:focus,.f select:focus,.f textarea:focus{
+  border-color:var(--blue-line);box-shadow:0 0 0 3px rgba(122,162,255,.08);}
+.f select{
+  appearance:none;cursor:pointer;padding-right:34px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' fill='none' stroke='%236b7fa8' stroke-width='2'%3E%3Cpath d='M1 1l4.5 4.5L10 1'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;
+}
+.f select option{background:#0f1525;}
+.f textarea{resize:vertical;min-height:90px;line-height:1.55;}
+.ch{font-size:11px;color:var(--text-3);text-align:right;margin-top:1px;}
+.hint{font-size:11px;color:var(--text-3);margin-top:3px;}
+
+/* ─── $ salary wrapper — pure flex, no pseudo tricks ─── */
+.sw{
+  display:flex;align-items:center;
+  background:#090e1c;border:1px solid rgba(122,162,255,.15);
+  border-radius:var(--r-sm);overflow:hidden;
+  transition:border .18s,box-shadow .18s;
+}
+.sw:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px rgba(122,162,255,.08);}
+.ss{padding:9px 0 9px 12px;font-size:13px;color:var(--text-3);flex-shrink:0;user-select:none;line-height:1;}
+.sw input{
+  border:none!important;outline:none!important;box-shadow:none!important;
+  background:transparent;padding:9px 12px 9px 5px;
+  font-family:inherit;font-size:13.5px;color:var(--text-1);
+  flex:1;min-width:0;
+}
+.sw input::placeholder{color:var(--text-3);}
+
+/* ─── type pills ─────────────────────────────────────── */
+.pg{display:flex;flex-wrap:wrap;gap:7px;}
+.tp{
+  font-family:inherit;font-size:11.5px;font-weight:600;
+  padding:5px 13px;border-radius:20px;
+  border:1px solid var(--card-border);background:transparent;color:var(--text-3);
+  cursor:pointer;transition:all .18s;
+}
+.tp.on{background:var(--blue-dim);border-color:var(--blue-line);color:var(--blue);}
+.tp:not(.on):hover{border-color:rgba(122,162,255,.3);color:var(--text-2);}
+
+/* ─── skills tag input ───────────────────────────────── */
+.skw{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  background:#090e1c;border:1px solid rgba(122,162,255,.15);
+  border-radius:var(--r-sm);padding:7px 10px;min-height:42px;cursor:text;
+  transition:border .18s,box-shadow .18s;
+}
+.skw.focused{border-color:var(--blue-line);box-shadow:0 0 0 3px rgba(122,162,255,.08);}
+.skt{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--blue-dim);border:1px solid var(--blue-line);
+  color:var(--blue);font-size:11px;font-weight:600;
+  padding:3px 8px;border-radius:20px;animation:tin .12s ease;
+}
+@keyframes tin{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.skt button{background:none;border:none;cursor:pointer;color:rgba(122,162,255,.5);
+  font-size:14px;padding:0;line-height:1;display:flex;align-items:center;transition:color .12s;}
+.skt button:hover{color:var(--blue);}
+#skIn{background:none;border:none;outline:none;font-family:inherit;
+  font-size:13px;color:var(--text-1);min-width:100px;flex:1;padding:1px 2px;}
+#skIn::placeholder{color:var(--text-3);}
+
+/* ─── submit row ─────────────────────────────────────── */
+.subrow{
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:10px;flex-shrink:0;padding-bottom:2px;
+}
+.btn2{font-family:inherit;font-size:13px;font-weight:600;
+  padding:9px 18px;border-radius:var(--r-md);
+  background:transparent;border:1px solid var(--card-border);
+  color:var(--text-2);cursor:pointer;transition:all .18s;}
+.btn2:hover{border-color:rgba(122,162,255,.3);color:var(--text-1);}
+.btn1{font-family:inherit;font-size:13px;font-weight:700;
+  padding:10px 26px;border-radius:var(--r-md);
+  background:linear-gradient(135deg,rgba(122,162,255,.15),rgba(192,132,252,.12));
+  border:1px solid var(--blue-line);color:var(--blue);
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;}
+.btn1:hover{background:linear-gradient(135deg,rgba(122,162,255,.22),rgba(192,132,252,.18));
+  box-shadow:0 4px 18px rgba(122,162,255,.15);}
+.btn1:disabled{opacity:.45;cursor:not-allowed;}
+.bspin{width:13px;height:13px;border-radius:50%;border:2px solid var(--blue);
+  border-top-color:transparent;animation:spin .7s linear infinite;display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn1.ld .bspin{display:block;}
+.btn1.ld .blbl{opacity:.5;}
+
+/* ─── AI button ──────────────────────────────────────── */
+.aib{font-family:inherit;font-size:11.5px;font-weight:700;
+  padding:7px 13px;border-radius:var(--r-sm);
+  border:1px solid rgba(192,132,252,.35);
+  background:var(--purple-dim);color:var(--purple);
+  cursor:pointer;transition:all .2s;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.aib:hover{background:rgba(192,132,252,.18);}
+.aib:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ─── DROPZONE ───────────────────────────────────────── */
+/* Key fix: use <label for="fileInput"> as the clickable area.
+   The <input type="file"> is hidden with display:none (not absolute),
+   so it cannot block the visual content. */
+.dz{
+  border:2px dashed rgba(122,162,255,.22);
+  border-radius:var(--r-lg);
+  background:rgba(122,162,255,.025);
+  transition:all .22s;
+  position:relative;overflow:hidden;
+}
+.dz.drag,.dz:hover{border-color:rgba(122,162,255,.5);background:var(--blue-dim);}
+.dz::before{
+  content:'';position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(122,162,255,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(122,162,255,.04) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;
+}
+.dz label{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;
+  padding:52px 24px;gap:0;cursor:pointer;
+  position:relative;z-index:1;
+}
+.dz-icon{font-size:42px;margin-bottom:16px;display:block;line-height:1;}
+.dz-title{font-size:15px;font-weight:700;color:var(--text-1);margin:0 0 8px;}
+.dz-sub{font-size:12.5px;color:var(--text-3);margin:0;line-height:1.7;}
+.dz-sub em{color:var(--blue);font-style:normal;font-weight:600;}
+.dz-hint{font-size:11px;color:rgba(122,162,255,.4);margin-top:12px;display:block;}
+#fileInput{display:none;} /* hidden — label triggers it */
+
+.fchosen{
+  display:none;align-items:center;gap:10px;
+  background:var(--green-dim);border:1px solid rgba(74,222,128,.22);
+  border-radius:var(--r-md);padding:11px 15px;
+  font-size:13px;color:var(--green);margin-top:12px;
+}
+.fchosen.show{display:flex;}
+.fchosen button{margin-left:auto;background:none;border:none;cursor:pointer;
+  color:var(--text-3);font-size:20px;line-height:1;transition:color .15s;}
+.fchosen button:hover{color:var(--red);}
+
+.pprog{
+  display:none;align-items:center;gap:10px;
+  font-size:12.5px;color:var(--text-2);margin-top:10px;
+  padding:11px 14px;background:var(--blue-dim);
+  border:1px solid var(--blue-line);border-radius:var(--r-md);
+}
+.pprog.show{display:flex;}
+.pprog .spin{width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--blue);border-top-color:transparent;
+  animation:spin .7s linear infinite;flex-shrink:0;}
+
+.jdx{display:none;margin-top:14px;}
+.jdx.show{display:block;}
+.jdxh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.jdxh span{font-size:12px;font-weight:600;color:var(--text-2);}
+.jdx textarea{
+  width:100%;box-sizing:border-box;
+  background:#090e1c;border:1px solid rgba(122,162,255,.12);
+  border-radius:var(--r-sm);color:var(--text-2);
+  font-family:inherit;font-size:12px;padding:11px 13px;
+  resize:vertical;min-height:130px;line-height:1.6;outline:none;
+}
+.jdx textarea:focus{border-color:var(--blue-line);}
+
+/* info tip card */
+.tip{
+  background:rgba(122,162,255,.04);border:1px solid rgba(122,162,255,.08);
+  border-radius:var(--r-lg);padding:15px 18px;
+  display:flex;gap:12px;align-items:flex-start;flex-shrink:0;
+}
+.tip-body{font-size:12px;color:var(--text-3);line-height:1.7;}
+.tip-title{font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:4px;}
+
+/* spacer so last field not hidden behind submit bar */
+.tail{height:24px;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div id="lbar"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <a href="/rec-dash.html" style="text-decoration:none;"><h2 class="brand">BeyondMatch</h2></a>
+  <nav class="menu">
+    <a href="rec-dash.html"     class="menu-item">Dashboard</a>
+    <a href="rec-postjob.html"  class="menu-item active">Post a Job</a>
+    <a href="rec-jobs.html"     class="menu-item">My Jobs</a>
+    <a href="cand-matches.html" class="menu-item">Candidate Matches</a>
+    <a href="rec-actions.html"  class="menu-item">Recruiter Actions</a>
+    <a href="settings.html"     class="menu-item">Settings</a>
+    <button class="menu-item logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
+  </nav>
+</aside>
+
+<main class="main">
+
+  <!-- HEADER — pinned, never scrolls -->
+  <div class="ph">
+    <div>
+      <h1>Post a Job</h1>
+      <p id="sub">Fill in the details below or switch to Upload JD</p>
+    </div>
+    <div class="mtoggle">
+      <button class="mtab on" id="tMan" onclick="mode('manual')">✏️ &nbsp;Manual Entry</button>
+      <button class="mtab"    id="tUp"  onclick="mode('upload')">📄 &nbsp;Upload JD</button>
+    </div>
+  </div>
+
+  <!-- BANNERS -->
+  <div id="okBanner">
+    <span style="font-size:22px;flex-shrink:0;">🎉</span>
+    <div>
+      <strong>Job posted successfully!</strong>
+      <div style="font-size:12px;opacity:.8;margin-top:2px;">
+        Your listing is live and will be matched against candidates.
+        <a href="rec-jobs.html" style="color:var(--blue);text-decoration:none;font-weight:700;"> View My Jobs →</a>
+      </div>
+    </div>
+  </div>
+  <div id="errBanner"></div>
+
+  <!-- SCROLLABLE PANEL — everything here scrolls -->
+  <div id="panel">
+
+    <!-- ══ UPLOAD MODE ══ -->
+    <div id="upPanel" style="display:none;flex-direction:column;gap:12px;">
+
+      <div class="card">
+        <div class="slabel">Upload Job Description</div>
+
+        <div class="dz" id="dz">
+          <label for="fileInput">
+            <span class="dz-icon">📋</span>
+            <span class="dz-title">Drop your JD here</span>
+            <p class="dz-sub">Supports <em>PDF, DOCX, TXT</em><br>We'll extract the text and auto-fill the form</p>
+            <span class="dz-hint">or click to browse files</span>
+          </label>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt" />
+
+        <div class="fchosen" id="fchosen">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="fname">—</span>
+          <button onclick="clearFile()">×</button>
+        </div>
+
+        <div class="pprog" id="pprog">
+          <div class="spin"></div>
+          <span>Extracting text from your document…</span>
+        </div>
+
+        <div class="jdx" id="jdx">
+          <div class="jdxh">
+            <span>Extracted Text</span>
+            <button class="aib" id="aibtn" onclick="aiParse()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              Auto-fill form with AI
+            </button>
+          </div>
+          <textarea id="jdText" rows="8" placeholder="Extracted text will appear here…"></textarea>
+        </div>
+      </div>
+
+      <div class="tip">
+        <span style="font-size:20px;flex-shrink:0;">💡</span>
+        <div class="tip-body">
+          <div class="tip-title">How it works</div>
+          Upload your JD as PDF, DOCX, or plain text. We extract the content, then AI parses the title, location,
+          salary, skills and description — and auto-fills the Manual Entry form. Review everything before posting.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MANUAL FORM MODE ══ -->
+    <div id="manPanel" style="display:flex;flex-direction:column;gap:0;">
+      <div class="card">
+        <div class="slabel">Job Details</div>
+        <div class="fg">
+
+          <!-- Title -->
+          <div class="f full">
+            <label>Job Title <span class="req">*</span></label>
+            <input type="text" id="f_title" placeholder="e.g. Senior Software Engineer" maxlength="120" oninput="cc(this,'tc')" />
+            <div class="ch"><span id="tc">0</span> / 120</div>
+          </div>
+
+          <!-- Location + Work Mode -->
+          <div class="f">
+            <label>Location <span class="req">*</span></label>
+            <input type="text" id="f_loc" placeholder="e.g. San Francisco, CA" />
+          </div>
+          <div class="f">
+            <label>Work Mode</label>
+            <select id="f_rem">
+              <option value="onsite">On-site</option>
+              <option value="remote">Remote</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+
+          <!-- Employment type pills -->
+          <div class="f full">
+            <label>Employment Type</label>
+            <div class="pg" id="pills">
+              <button class="tp on" data-v="Full-time">Full-time</button>
+              <button class="tp" data-v="Part-time">Part-time</button>
+              <button class="tp" data-v="Contract">Contract</button>
+              <button class="tp" data-v="Internship">Internship</button>
+              <button class="tp" data-v="Freelance">Freelance</button>
+            </div>
+          </div>
+
+          <div class="div"></div>
+
+          <!-- Salary -->
+          <div class="f">
+            <label>Salary Min (USD / yr)</label>
+            <div class="sw"><span class="ss">$</span><input type="number" id="f_smin" placeholder="60000" min="0" /></div>
+          </div>
+          <div class="f">
+            <label>Salary Max (USD / yr)</label>
+            <div class="sw"><span class="ss">$</span><input type="number" id="f_smax" placeholder="120000" min="0" /></div>
+          </div>
+
+          <!-- Experience + Level -->
+          <div class="f">
+            <label>Experience Required</label>
+            <select id="f_exp">
+              <option value="">Any</option>
+              <option value="0-1">0 – 1 year</option>
+              <option value="1-3">1 – 3 years</option>
+              <option value="3-5">3 – 5 years</option>
+              <option value="5-8">5 – 8 years</option>
+              <option value="8+">8+ years</option>
+            </select>
+          </div>
+          <div class="f">
+            <label>Seniority Level</label>
+            <select id="f_lvl">
+              <option value="">Unspecified</option>
+              <option value="Junior">Junior</option>
+              <option value="Mid">Mid-level</option>
+              <option value="Senior">Senior</option>
+              <option value="Lead">Lead / Principal</option>
+              <option value="Manager">Manager</option>
+              <option value="Director">Director</option>
+              <option value="VP">VP / C-Suite</option>
+            </select>
+          </div>
+
+          <div class="div"></div>
+
+          <!-- Skills -->
+          <div class="f full">
+            <label>Required Skills</label>
+            <div class="skw" id="skw" onclick="document.getElementById('skIn').focus()">
+              <input id="skIn" placeholder="Type a skill and press Enter or comma…" autocomplete="off" />
+            </div>
+            <div class="hint">Press
+              <kbd style="background:rgba(122,162,255,.1);border:1px solid var(--blue-line);padding:1px 5px;border-radius:4px;font-size:10px;">Enter</kbd>
+              or
+              <kbd style="background:rgba(122,162,255,.1);border:1px solid var(--blue-line);padding:1px 5px;border-radius:4px;font-size:10px;">,</kbd>
+              to add a skill
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="f full">
+            <label>Job Description <span class="req">*</span></label>
+            <textarea id="f_desc" rows="7" placeholder="Describe responsibilities, requirements, and what you're looking for…" oninput="cc(this,'dc')"></textarea>
+            <div class="ch"><span id="dc">0</span> characters</div>
+          </div>
+
+          <!-- Industry + Function -->
+          <div class="f">
+            <label>Industry</label>
+            <select id="f_ind">
+              <option value="">Select industry</option>
+              <option>Technology</option><option>Finance</option>
+              <option>Healthcare</option><option>E-commerce</option>
+              <option>Education</option><option>Manufacturing</option>
+              <option>Media &amp; Entertainment</option><option>Consulting</option>
+              <option>Government</option><option>Non-profit</option><option>Other</option>
+            </select>
+          </div>
+          <div class="f">
+            <label>Job Function</label>
+            <select id="f_fun">
+              <option value="">Select function</option>
+              <option>Engineering</option><option>Data Science / Analytics</option>
+              <option>Design / UX</option><option>Product Management</option>
+              <option>Marketing</option><option>Sales</option><option>Operations</option>
+              <option>HR / Talent</option><option>Finance / Accounting</option>
+              <option>Legal</option><option>Customer Success</option><option>Other</option>
+            </select>
+          </div>
+
+          <!-- Deadline + Openings -->
+          <div class="f">
+            <label>Application Deadline</label>
+            <input type="date" id="f_dl" />
+          </div>
+          <div class="f">
+            <label>No. of Openings</label>
+            <input type="number" id="f_op" min="1" value="1" />
+          </div>
+
+          <!-- Apply Link -->
+          <div class="f full">
+            <label>Application Link <span style="color:var(--text-3);font-weight:400;">(optional)</span></label>
+            <input type="url" id="f_apply" placeholder="https://company.com/careers/apply-here" />
+            <div class="hint">
+              BeyondMatch jobs use the built-in apply flow — candidates apply directly through the platform.
+              Only fill this in if you want to send candidates to an external careers page instead.
+            </div>
+          </div>
+
+        </div><!-- /fg -->
+      </div><!-- /card -->
+      <div class="tail"></div>
+    </div><!-- /manPanel -->
+
+  </div><!-- /panel -->
+
+  <!-- SUBMIT ROW — pinned at bottom -->
+  <div class="subrow">
+    <button class="btn2" onclick="resetForm()">Clear Form</button>
+    <button class="btn1" id="subBtn" onclick="submitJob()">
+      <div class="bspin"></div>
+      <span class="blbl">Post Job →</span>
+    </button>
+  </div>
+
+</main>
+
+<script>
+const API_BASE = "https://2bcj60lax1.execute-api.eu-north-1.amazonaws.com/prod";
+const $  = id => document.getElementById(id);
+const bar = p => { const e=$("lbar"); e.style.opacity="1"; e.style.width=p+"%"; if(p>=100) setTimeout(()=>e.style.opacity="0",600); };
+const showErr = msg => { const b=$("errBanner"); b.textContent=msg; b.style.display="block"; };
+const hideErr = () => { $("errBanner").style.display="none"; };
+const cc = (el,id) => $(id).textContent = el.value.length;
+
+/* ── mode switch ── */
+function mode(m) {
+  const up = m==="upload";
+  $("upPanel").style.display  = up ? "flex" : "none";
+  $("manPanel").style.display = up ? "none" : "flex";
+  $("tMan").classList.toggle("on", !up);
+  $("tUp").classList.toggle("on",  up);
+  $("sub").textContent = up
+    ? "Upload a PDF or DOCX — AI will fill the form for you"
+    : "Fill in the details below or switch to Upload JD";
+  $("panel").scrollTop = 0;
+}
+
+/* ── pills ── */
+document.querySelectorAll(".tp").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".tp").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+  });
+});
+const getPill = () => { const s=document.querySelector(".tp.on"); return s?s.dataset.v:"Full-time"; };
+
+/* ── skills ── */
+const skArr = [];
+function addSk(raw) {
+  const s = raw.trim().replace(/,/g,""); if(!s) return;
+  const k = s.toLowerCase(); if(skArr.includes(k)) return;
+  skArr.push(k);
+  const t = document.createElement("div");
+  t.className="skt"; t.dataset.k=k;
+  t.innerHTML=`${s}<button type="button">×</button>`;
+  t.querySelector("button").onclick = () => { skArr.splice(skArr.indexOf(k),1); t.remove(); };
+  $("skw").insertBefore(t, $("skIn"));
+}
+$("skIn").addEventListener("keydown", e => {
+  if(e.key==="Enter"||e.key===","){e.preventDefault();addSk($("skIn").value);$("skIn").value="";}
+  if(e.key==="Backspace"&&!$("skIn").value){
+    const ts=document.querySelectorAll(".skt"); if(ts.length) ts[ts.length-1].querySelector("button").click();
+  }
+});
+$("skIn").addEventListener("blur", ()=>{ if($("skIn").value.trim()){addSk($("skIn").value);$("skIn").value="";} $("skw").classList.remove("focused"); });
+$("skIn").addEventListener("focus",()=>$("skw").classList.add("focused"));
+
+/* ── file upload ── */
+function clearFile(){
+  $("fileInput").value=""; $("fchosen").classList.remove("show");
+  $("pprog").classList.remove("show"); $("jdx").classList.remove("show");
+}
+$("fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+const dzEl = $("dz");
+dzEl.addEventListener("dragover",  e=>{ e.preventDefault(); dzEl.classList.add("drag"); });
+dzEl.addEventListener("dragleave", ()=>dzEl.classList.remove("drag"));
+dzEl.addEventListener("drop", e=>{
+  e.preventDefault(); dzEl.classList.remove("drag");
+  const f=e.dataTransfer.files[0]; if(f) handleFile(f);
+});
+
+async function handleFile(file) {
+  if(!/\.(pdf|docx?|txt)$/i.test(file.name)){ showErr("Upload PDF, DOCX, or TXT."); return; }
+  hideErr();
+  $("fname").textContent = file.name;
+  $("fchosen").classList.add("show");
+  $("pprog").classList.add("show");
+  $("jdx").classList.remove("show");
+  try {
+    let txt = "";
+    if(/\.pdf$/i.test(file.name))    txt = await parsePDF(file);
+    else if(/\.docx?$/i.test(file.name)) txt = await parseDOCX(file);
+    else txt = await file.text();
+    $("jdText").value = txt.trim();
+    $("pprog").classList.remove("show");
+    $("jdx").classList.add("show");
+  } catch(err) {
+    $("pprog").classList.remove("show");
+    showErr("Extract failed: "+err.message);
+  }
+}
+
+async function parsePDF(file) {
+  if(!window.pdfjsLib){
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc=
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+  const buf=await file.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  let t=""; for(let i=1;i<=pdf.numPages;i++){
+    const pg=await pdf.getPage(i); const c=await pg.getTextContent();
+    t+=c.items.map(x=>x.str).join(" ")+"\n";
+  }
+  return t;
+}
+async function parseDOCX(file){
+  if(!window.mammoth) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+  const buf=await file.arrayBuffer();
+  return (await window.mammoth.extractRawText({arrayBuffer:buf})).value;
+}
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    if(document.querySelector(`script[src="${src}"]`)){res();return;}
+    const s=document.createElement("script");s.src=src;s.onload=res;
+    s.onerror=()=>rej(new Error("Failed: "+src));document.head.appendChild(s);
+  });
+}
+
+/* ── AI parse ── */
+async function aiParse(){
+  const txt=$("jdText").value.trim();
+  if(!txt){showErr("No extracted text.");return;}
+  const btn=$("aibtn"); btn.disabled=true;
+  btn.innerHTML=`<div class="bspin" style="display:block;width:11px;height:11px;border-width:2px;"></div> Parsing…`;
+  hideErr(); bar(20);
+  try{
+    const {callGemini}=await import("./gemini.js");
+    const raw=await callGemini(`
+You are a job description parser. Extract structured data from the JD text.
+Return ONLY a raw JSON object (no markdown, no backticks):
+{"title":"","location":"","remote":"onsite|remote|hybrid",
+"employment_type":"Full-time|Part-time|Contract|Internship|Freelance",
+"salary_min":0,"salary_max":0,"experience":"0-1|1-3|3-5|5-8|8+|",
+"level":"Junior|Mid|Senior|Lead|Manager|Director|VP|",
+"skills":[],"description":"","industry":"","function":"","apply_url":""}
+JD:\n${txt.slice(0,3000)}`);
+    const d=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    if(d.title){$("f_title").value=d.title;cc($("f_title"),"tc");}
+    if(d.location) $("f_loc").value=d.location;
+    if(d.remote)   $("f_rem").value={onsite:"onsite",remote:"remote",hybrid:"hybrid"}[d.remote]||"onsite";
+    if(d.employment_type) document.querySelectorAll(".tp").forEach(b=>b.classList.toggle("on",b.dataset.v===d.employment_type));
+    if(d.salary_min>0) $("f_smin").value=d.salary_min;
+    if(d.salary_max>0) $("f_smax").value=d.salary_max;
+    if(d.experience) $("f_exp").value=d.experience;
+    if(d.level)      $("f_lvl").value=d.level;
+    if(d.description){$("f_desc").value=d.description;cc($("f_desc"),"dc");}
+    if(d.industry)   $("f_ind").value=d.industry;
+    if(d.function)   $("f_fun").value=d.function;
+    if(d.apply_url)  $("f_apply").value=d.apply_url;
+    if(Array.isArray(d.skills)){
+      skArr.length=0; document.querySelectorAll(".skt").forEach(t=>t.remove());
+      d.skills.slice(0,20).forEach(s=>addSk(s));
+    }
+    bar(100);
+    if(window.showToast) showToast("Form auto-filled ✓","success");
+    mode("manual");
+  }catch(err){bar(100);showErr("AI parse failed: "+err.message);}
+  finally{
+    btn.disabled=false;
+    btn.innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Auto-fill form with AI`;
+  }
+}
+
+/* ── reset ── */
+function resetForm(){
+  ["f_title","f_loc","f_smin","f_smax","f_desc","f_dl","f_apply"].forEach(id=>$(id).value="");
+  $("f_rem").value="onsite";$("f_exp").value="";$("f_lvl").value="";
+  $("f_ind").value="";$("f_fun").value="";$("f_op").value="1";
+  document.querySelectorAll(".tp").forEach((b,i)=>b.classList.toggle("on",i===0));
+  skArr.length=0; document.querySelectorAll(".skt").forEach(t=>t.remove());
+  $("tc").textContent="0";$("dc").textContent="0";
+  hideErr();$("okBanner").style.display="none";
+}
+
+/* ── submit ── */
+async function submitJob(){
+  hideErr();$("okBanner").style.display="none";
+  const title=$("f_title").value.trim();
+  const loc  =$("f_loc").value.trim();
+  const desc =$("f_desc").value.trim();
+  if(!title){showErr("Job title is required.");return;}
+  if(!loc)  {showErr("Location is required.");return;}
+  if(!desc) {showErr("Job description is required.");return;}
+  if(!window.auth?.currentUser){showErr("Not authenticated — please refresh.");return;}
+
+  // For BeyondMatch-posted jobs, build a real internal apply URL that
+  // redirects candidates to cand_actions.html with ?apply= params.
+  // If the recruiter manually entered an external URL, respect that instead.
+  const manualUrl = $("f_apply").value.trim();
+  const jobIdTemp = `bm_${window.auth.currentUser.uid}_${Date.now()}`;
+  const internalApplyUrl = `${window.location.origin}/cand_actions.html?apply=${encodeURIComponent(jobIdTemp)}&title=${encodeURIComponent(title)}&recruiter=${encodeURIComponent(window.auth.currentUser.uid)}`;
+  const applyUrl = manualUrl || internalApplyUrl;
+  const sMin=parseInt($("f_smin").value)||0;
+  const sMax=parseInt($("f_smax").value)||0;
+  if(sMin&&sMax&&sMin>sMax){showErr("Salary min cannot exceed salary max.");return;}
+  if(!window.auth?.currentUser){showErr("Not authenticated — please refresh.");return;}
+
+  const btn=$("subBtn");btn.classList.add("ld");btn.disabled=true;bar(15);
+  try{
+    const user=window.auth.currentUser;
+    const {getDoc,doc,addDoc,collection,serverTimestamp}=await import(
+      "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const snap=await getDoc(doc(window.db,"users",user.uid));
+    const ud=snap.exists()?snap.data():{};
+    bar(35);
+
+    const payload={
+      job_id: jobIdTemp,
+      title,location:loc,location_display:loc,
+      remote:$("f_rem").value,
+      employment_type:getPill(),
+      salary_min:sMin,salary_max:sMax,salary_min_usd:sMin,salary_max_usd:sMax,
+      experience:$("f_exp").value,
+      level:$("f_lvl").value,
+      skills:[...skArr],description:desc,jd:desc,
+      industry:$("f_ind").value,job_function:$("f_fun").value,
+      openings:parseInt($("f_op").value)||1,
+      deadline:$("f_dl").value||null,
+      apply_url: applyUrl,
+      application_url: applyUrl,
+      source:"beyondmatch",posted_by:"recruiter",
+      recruiter_id:user.uid,recruiter_email:user.email,
+      company: ud.organisation_name || "Your Company",
+      is_active:true,posted_at:new Date().toISOString()
+    };
+    bar(60);
+
+
+    const res=await fetch(`${API_BASE}/jobs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    let data={};
+    try{const t=await res.text();data=t?JSON.parse(t):{};}catch{}
+    if(data.body&&typeof data.body==="string"){try{data=JSON.parse(data.body);}catch{}}
+    bar(85);
+    if (!res.ok) throw new Error(data.message||data.error||`HTTP ${res.status}`);
+
+    try{await addDoc(collection(window.db,"posted_jobs"),{...payload,apply_url:applyUrl,application_url:applyUrl,created_at:serverTimestamp()});}catch{}
+    bar(100);
+
+    const ob=$("okBanner");ob.style.display="flex";ob.scrollIntoView({behavior:"smooth",block:"nearest"});
+    if(window.showToast) showToast("Job posted successfully!","success");
+    resetForm();
+  }catch(err){
+    bar(100);showErr("Failed to post: "+err.message);
+    if(window.showToast) showToast("Post failed","error");
+  }finally{
+    btn.classList.remove("ld");btn.disabled=false;
+  }
+}
+
+/* ── auth init ── */
+(function(){
+  let n=0,t=setInterval(()=>{
+    n++;
+    if(window.auth!==undefined&&window.db!==undefined){
+      clearInterval(t);
+      if(typeof window.auth.onAuthStateChanged==="function")
+        window.auth.onAuthStateChanged(u=>{if(!u)window.location.href="/index.html";else bar(100);});
+      else bar(100);
+    }
+    if(n>50){clearInterval(t);bar(100);}
+  },100);
+})();
+</script>
+
+<script type="module" src="auth.js"></script>
+<script type="module" src="api.js"></script>
+</body>
+</html>

@@ -231,6 +231,10 @@ input[type="text"]::placeholder { color: #4a5580; }
   background: rgba(192,132,252,0.08); border-color: rgba(192,132,252,0.2); color: var(--purple);
 }
 .card-btn.analyse:hover { background: rgba(192,132,252,0.16); border-color: rgba(192,132,252,0.35); }
+.card-btn.invite {
+  background: rgba(74,222,128,0.07); border-color: rgba(74,222,128,0.2); color: #4ade80;
+}
+.card-btn.invite:hover { background: rgba(74,222,128,0.15); border-color: rgba(74,222,128,0.35); }
 
 /* ── Empty / Loading states ── */
 .empty-state {
@@ -290,6 +294,7 @@ input[type="text"]::placeholder { color: #4a5580; }
   <a href="/cand-matches.html" style="text-decoration:none;"><h2 class="brand">BeyondMatch</h2></a>
   <nav class="menu">
     <a href="rec-dash.html"     class="menu-item">Dashboard</a>
+    <a href="rec-postjob.html"     class="menu-item">Post Job</a>
     <a href="rec-jobs.html"     class="menu-item">My Jobs</a>
     <a href="cand-matches.html" class="menu-item active">Candidate Matches</a>
     <a href="rec-actions.html"  class="menu-item">Recruiter Actions</a>
@@ -523,9 +528,15 @@ function _renderGrid(candidates, llmMap) {
           })()}
         </div>
 
-        <div class="card-actions">
-          <a href="rec-actions.html?id=${c.candidate_id}&job=${_currentJobId}"
-             class="card-btn view">View Profile →</a>
+        <div class="card-actions" style="grid-template-columns:1fr 1fr 1fr;">
+          <button class="card-btn view"
+            onclick="openCandProfile('${c.candidate_id}','${(name).replace(/'/g,"\\'")}','${(c.email||'').replace(/'/g,"\\'")}','${_currentJobId}')">
+            👤 Profile
+          </button>
+          <button class="card-btn invite"
+            onclick="openInviteModal('${c.candidate_id}','${(name).replace(/'/g,"\\'")}','${(c.email||'').replace(/'/g,"\\'")}','${_currentJobId}')">
+            ✉ Invite
+          </button>
           <button class="card-btn analyse"
             onclick="window.openCandidateAnalysis && openCandidateAnalysis('${c.candidate_id}','${(name).replace(/'/g,'')}','${_currentJobId}')">
             🔍 Analyse
@@ -540,6 +551,349 @@ function _renderGrid(candidates, llmMap) {
 /* Search + sort listeners */
 document.getElementById('candSearchInput')?.addEventListener('input',  () => _renderGrid(_allCandidates, _currentLlmMap));
 document.getElementById('candSortSelect')?.addEventListener('change', () => _renderGrid(_allCandidates, _currentLlmMap));
+</script>
+
+<!-- ════════ INVITE TO APPLY MODAL ════════ -->
+<div id="inviteOverlay" style="
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.78); backdrop-filter:blur(6px);
+  z-index:1001; align-items:center; justify-content:center;
+  padding:20px; box-sizing:border-box;
+" onclick="if(event.target===this)closeInviteModal()">
+  <div style="
+    background:#0f1220; border:1px solid rgba(122,162,255,0.15);
+    border-radius:16px; width:100%; max-width:500px;
+    padding:28px; box-sizing:border-box; position:relative; color:#e2e8f0;
+  ">
+    <button onclick="closeInviteModal()" style="
+      position:absolute; top:14px; right:16px; background:none; border:none;
+      color:#4a5580; font-size:20px; cursor:pointer; line-height:1;
+    " onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#4a5580'">✕</button>
+
+    <div style="font-size:11px;color:#4ade80;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Invite to Apply</div>
+    <h2 id="inviteModalName" style="margin:0 0 4px;font-size:20px;color:#e2e8f0;"></h2>
+    <p id="inviteModalJob" style="margin:0 0 22px;color:#6b7fa8;font-size:13px;"></p>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;display:block;margin-bottom:8px;">
+        Personal Message <span style="color:#4a5580;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span>
+      </label>
+      <textarea id="inviteNoteInput" placeholder="Tell the candidate why they're a great fit…"
+        style="width:100%;min-height:90px;resize:vertical;
+               background:#090e1c;border:1px solid rgba(122,162,255,.15);
+               border-radius:10px;color:#e2e8f0;font-family:inherit;font-size:13px;
+               padding:12px 14px;outline:none;line-height:1.55;box-sizing:border-box;"
+        onfocus="this.style.borderColor='rgba(122,162,255,.4)'"
+        onblur="this.style.borderColor='rgba(122,162,255,.15)'"></textarea>
+    </div>
+
+    <div id="inviteStatusMsg" style="display:none;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;"></div>
+
+    <!-- AI draft button -->
+    <div style="margin-bottom:16px;">
+      <button id="inviteAiBtn" onclick="draftInviteWithAI()" style="
+        font-family:inherit;font-size:12px;font-weight:600;
+        padding:7px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid rgba(192,132,252,.25);
+        background:rgba(192,132,252,.08);color:#c084fc;
+        transition:all .18s;display:flex;align-items:center;gap:6px;
+      ">✨ Draft with AI</button>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button onclick="closeInviteModal()" style="
+        font-family:inherit;font-size:13px;font-weight:600;
+        padding:9px 20px;border-radius:9px;cursor:pointer;
+        border:1px solid rgba(122,162,255,.2);
+        background:transparent;color:#7aa2ff;transition:all .18s;
+      ">Cancel</button>
+      <button id="inviteSubmitBtn" onclick="submitInvite()" style="
+        font-family:inherit;font-size:13px;font-weight:600;
+        padding:9px 20px;border-radius:9px;cursor:pointer;
+        border:1px solid rgba(74,222,128,.3);
+        background:rgba(74,222,128,.12);color:#4ade80;transition:all .18s;
+      ">📨 Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { auth, db } from "./auth.js";
+import {
+  collection, addDoc, query, where, getDocs, doc, getDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+/* ── Invite state ── */
+let _inviteState = null;
+
+window.openInviteModal = async function(candidateId, name, email, jobId) {
+  // Need the job title and recruiter info
+  let jobTitle = jobId;
+  let recruiterId = null;
+  let recruiterName = '';
+
+  // Fetch job title from orgJobs (populated by api.js) or Firestore
+  try {
+    const jSnap = await getDoc(doc(db, 'posted_jobs', jobId));
+    if (jSnap.exists()) jobTitle = jSnap.data().title || jobId;
+  } catch {}
+
+  // Get recruiter uid from auth
+  const user = auth.currentUser;
+  if (!user) { window.showToast?.('Please log in first.', 'warning'); return; }
+  recruiterId = user.uid;
+
+  // Get recruiter display name from Firestore users doc
+  try {
+    const uSnap = await getDoc(doc(db, 'users', user.uid));
+    if (uSnap.exists()) recruiterName = uSnap.data().name || uSnap.data().displayName || '';
+  } catch {}
+
+  _inviteState = { candidateId, name, email, jobId, jobTitle, recruiterId, recruiterName };
+
+  document.getElementById('inviteModalName').textContent = name || 'Candidate';
+  document.getElementById('inviteModalJob').textContent  = `Inviting to apply for: ${jobTitle}`;
+  document.getElementById('inviteNoteInput').value = '';
+  document.getElementById('inviteStatusMsg').style.display = 'none';
+
+  const btn = document.getElementById('inviteSubmitBtn');
+  btn.disabled = false;
+  btn.textContent = '📨 Send Invite';
+
+  document.getElementById('inviteOverlay').style.display = 'flex';
+};
+
+window.closeInviteModal = function() {
+  document.getElementById('inviteOverlay').style.display = 'none';
+  _inviteState = null;
+};
+
+window.draftInviteWithAI = async function() {
+  if (!_inviteState) return;
+  const btn = document.getElementById('inviteAiBtn');
+  btn.disabled = true;
+  btn.textContent = '✨ Drafting…';
+
+  const { callGemini } = await import('./gemini.js').catch(() => ({ callGemini: null }));
+  if (!callGemini) { btn.disabled = false; btn.textContent = '✨ Draft with AI'; return; }
+
+  const prompt = `You are a recruiter at a company. Write a short, warm, professional 2-paragraph message inviting a candidate named ${_inviteState.name || 'the candidate'} to apply for the role of "${_inviteState.jobTitle}". Be encouraging and specific about why they'd be a great fit. Return only the message body, no subject line.`;
+
+  try {
+    const draft = await callGemini(prompt);
+    document.getElementById('inviteNoteInput').value = draft.trim();
+  } catch {
+    window.showToast?.('AI draft failed. Try again.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Draft with AI';
+  }
+};
+
+window.submitInvite = async function() {
+  if (!_inviteState) return;
+  const { candidateId, name, email, jobId, jobTitle, recruiterId, recruiterName } = _inviteState;
+  const note = document.getElementById('inviteNoteInput').value.trim();
+  const btn  = document.getElementById('inviteSubmitBtn');
+  const msg  = document.getElementById('inviteStatusMsg');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending…';
+  msg.style.display = 'none';
+
+  // Find candidate's Firebase UID so notification lands in their cand-actions
+  let candidateUserUid = null;
+  try {
+    const cSnap = await getDoc(doc(db, 'candidates', candidateId));
+    candidateUserUid = cSnap.exists() ? (cSnap.data().user_id || null) : null;
+  } catch {}
+
+  // Build the deep-link URL for the candidate to click and apply directly
+  const applyUrl = `cand-actions.html?apply=${encodeURIComponent(jobId)}&title=${encodeURIComponent(jobTitle)}&recruiter=${encodeURIComponent(recruiterId)}`;
+
+  try {
+    // 1. Write notification to Firestore (candidate sees it in their bell)
+    if (candidateUserUid) {
+      await addDoc(collection(db, 'notifications'), {
+        to_user_id:     candidateUserUid,
+        to_role:        'candidate',
+        from_role:      'recruiter',
+        type:           'invite_to_apply',
+        job_id:         jobId,
+        job_title:      jobTitle,
+        recruiter_id:   recruiterId,
+        recruiter_name: recruiterName,
+        message:        note || `${recruiterName || 'A recruiter'} invited you to apply for "${jobTitle}".`,
+        apply_url:      applyUrl,
+        read:           false,
+        created_at:     serverTimestamp()
+      });
+    }
+
+    // 2. Also send email if we have one (mailto fallback — opens mail client)
+    if (email) {
+      const subject = encodeURIComponent(`You've been invited to apply — ${jobTitle}`);
+      const body = encodeURIComponent(
+        (note ? note + '\n\n' : '') +
+        `Apply here: ${window.location.origin}/${applyUrl}\n\nBeyondMatch`
+      );
+      // Open mailto in background without navigating
+      const a = document.createElement('a');
+      a.href = `mailto:${email}?subject=${subject}&body=${body}`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    msg.textContent = candidateUserUid
+      ? '✅ Invite sent! The candidate will see it in their notifications.'
+      : email
+        ? '✅ Email invite sent to candidate.'
+        : '✅ Invite recorded (no email/account found for this candidate).';
+    msg.style.cssText += ';background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;';
+    btn.textContent = '✓ Sent';
+
+    setTimeout(() => window.closeInviteModal(), 2500);
+  } catch (err) {
+    console.error('Invite error:', err);
+    msg.textContent = 'Failed to send invite. Please try again.';
+    msg.style.cssText += ';background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;';
+    btn.disabled = false;
+    btn.textContent = '📨 Send Invite';
+  }
+};
+</script>
+
+
+<div id="candProfileOverlay" style="
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.78); backdrop-filter:blur(6px);
+  z-index:1000; align-items:center; justify-content:center;
+  padding:20px; box-sizing:border-box;
+" onclick="if(event.target===this)this.style.display='none'">
+  <div style="
+    background:#0f1220; border:1px solid rgba(122,162,255,0.15);
+    border-radius:16px; width:100%; max-width:520px;
+    max-height:88vh; overflow-y:auto;
+    padding:28px; box-sizing:border-box; position:relative;
+    color:#e2e8f0;
+  ">
+    <button onclick="document.getElementById('candProfileOverlay').style.display='none'" style="
+      position:absolute; top:14px; right:16px;
+      background:none; border:none; color:#4a5580;
+      font-size:20px; cursor:pointer; line-height:1; transition:color .15s;
+    " onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#4a5580'">✕</button>
+    <div id="candProfileContent"></div>
+  </div>
+</div>
+
+<script>
+/* ── Candidate profile modal for API-matched candidates ── */
+window.openCandProfile = async function(candidateId, name, email, jobId) {
+  const overlay = document.getElementById('candProfileOverlay');
+  const content = document.getElementById('candProfileContent');
+  overlay.style.display = 'flex';
+
+  // show spinner while fetching
+  content.innerHTML = `
+    <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">Candidate Profile</div>
+    <div style="display:flex;align-items:center;gap:10px;color:#6b7280;font-size:13px;padding:24px 0;">
+      <div style="width:18px;height:18px;border-radius:50%;border:2px solid #7aa2ff;border-top-color:transparent;animation:spin .8s linear infinite;flex-shrink:0;"></div>
+      Loading profile…
+    </div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
+
+  // Try to fetch full candidate doc from Firestore
+  let candData = null;
+  try {
+    const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const snap = await getDoc(doc(window.db, 'candidates', candidateId));
+    if (snap.exists()) candData = snap.data();
+  } catch { /* use passed-in args as fallback */ }
+
+  const displayName  = candData?.name  || name  || 'Candidate';
+  const displayEmail = candData?.email || email || '';
+  const role         = candData?.applied_role || '';
+  const skills       = (candData?.matched_skills || []).slice(0, 8);
+  const resumeSnip   = (candData?.resume_text || '').slice(0, 500);
+
+  // Find LLM data if available from the current render state
+  const llm = (typeof _currentLlmMap !== 'undefined' && _currentLlmMap[candidateId]) || {};
+  const insight = llm.recruiter_summary || '';
+
+  content.innerHTML = `
+    <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Candidate Profile</div>
+    <h2 style="margin:0 0 4px;font-size:20px;color:#e2e8f0;">${_esc(displayName)}</h2>
+    ${role ? `<p style="margin:0 0 20px;color:#6b7fa8;font-size:13px;">${_esc(role)}</p>` : '<div style="margin-bottom:20px;"></div>'}
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+      ${displayEmail ? `
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:3px;">Email</div>
+          <div style="font-size:13.5px;color:#c9d5e8;">${_esc(displayEmail)}</div>
+        </div>` : ''}
+      ${jobId ? `
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:3px;">Matched For Job</div>
+          <div style="font-size:13px;color:#c9d5e8;font-family:monospace;">${_esc(jobId)}</div>
+        </div>` : ''}
+    </div>
+
+    ${skills.length ? `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:8px;">Matched Skills</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          ${skills.map(s => `<span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:5px;background:rgba(122,162,255,0.12);color:#7aa2ff;border:1px solid rgba(122,162,255,0.2);text-transform:uppercase;letter-spacing:0.03em;">${_esc(s)}</span>`).join('')}
+        </div>
+      </div>` : ''}
+
+    ${insight ? `
+      <div style="margin-bottom:18px;font-size:12px;color:#9bb3ff;background:rgba(122,162,255,0.06);border:1px solid rgba(122,162,255,0.12);border-radius:7px;padding:9px 12px;line-height:1.55;">
+        ✦ ${_esc(insight)}
+      </div>` : ''}
+
+    ${resumeSnip ? `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:8px;">Resume Snippet</div>
+        <div style="background:#090e1c;border:1px solid rgba(122,162,255,0.1);border-radius:10px;padding:12px 14px;font-size:12px;color:#a0aec0;line-height:1.6;max-height:120px;overflow-y:auto;">
+          ${_esc(resumeSnip)}${(candData?.resume_text||'').length > 500 ? '…' : ''}
+        </div>
+      </div>` : ''}
+
+    <div style="height:1px;background:rgba(122,162,255,0.08);margin-bottom:18px;"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      ${displayEmail ? `
+        <a href="mailto:${_esc(displayEmail)}?subject=Your profile on BeyondMatch" style="
+          display:inline-flex;align-items:center;gap:6px;
+          font-family:inherit;font-size:13px;font-weight:600;
+          padding:9px 18px;border-radius:9px;cursor:pointer;
+          border:1px solid rgba(122,162,255,0.2);
+          background:transparent;color:#7aa2ff;
+          text-decoration:none;transition:all .18s;
+        " onmouseover="this.style.background='rgba(122,162,255,0.1)'" onmouseout="this.style.background='transparent'">
+          ✉ Email Candidate
+        </a>` : ''}
+      <button onclick="
+        document.getElementById('candProfileOverlay').style.display='none';
+        window.openCandidateAnalysis && openCandidateAnalysis('${candidateId.replace(/'/g,"\\'")}','${displayName.replace(/'/g,"\\'")}','${(jobId||'').replace(/'/g,"\\'")}');
+      " style="
+        font-family:inherit;font-size:13px;font-weight:600;
+        padding:9px 18px;border-radius:9px;cursor:pointer;
+        border:1px solid rgba(192,132,252,0.25);
+        background:rgba(192,132,252,0.08);color:#c084fc;
+        transition:all .18s;
+      " onmouseover="this.style.background='rgba(192,132,252,0.18)'" onmouseout="this.style.background='rgba(192,132,252,0.08)'">
+        🔍 Deep Analysis
+      </button>
+    </div>
+  `;
+};
+
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 
 <script type="module" src="auth.js"></script>

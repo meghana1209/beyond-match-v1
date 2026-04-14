@@ -6,6 +6,22 @@
   <title>My Jobs – BeyondMatch</title>
   <link rel="stylesheet" href="recruiter-matches.css" />
   <link rel="stylesheet" href="skeleton-loader.css" />
+<style>
+/* ── Apply button as <a> — same look as View Profile → in cand-matches.html ── */
+a.modern-view-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  background: rgba(122,162,255,.12);
+  border: 1px solid rgba(122,162,255,.28);
+  color: #7aa2ff; text-decoration: none;
+  transition: background .18s, border-color .18s;
+}
+a.modern-view-btn:hover {
+  background: rgba(122,162,255,.22);
+  border-color: rgba(122,162,255,.5);
+}
+</style>
 </head>
 <body>
 
@@ -13,6 +29,7 @@
   <a href="/rec-jobs.html" style="text-decoration:none;"><h2 class="cand-brand">BeyondMatch</h2></a>
   <nav class="menu">
     <a href="rec-dash.html"     class="menu-item">Dashboard</a>
+      <a href="rec-postjob.html"     class="menu-item">Post Job</a>
     <a href="rec-jobs.html"     class="menu-item active">My Jobs</a>
     <a href="cand-matches.html" class="menu-item">Candidate Matches</a>
     <a href="rec-actions.html"  class="menu-item">Recruiter Actions</a>

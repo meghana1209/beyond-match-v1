@@ -250,7 +250,7 @@ ${JSON.stringify(slim)}`;
 
     const byJobId = {}, byIndex = {};
     parsed.forEach(r => {
-      if (r.job_id)     byJobId[r.job_id] = r;
+      if (r.job_id)        byJobId[r.job_id] = r;
       if (r.index != null) byIndex[r.index]  = r;
     });
 
@@ -381,7 +381,7 @@ async function loadCandidateJobMatches() {
   const grid        = document.getElementById("matchesGrid");
 
   if (!candidateId) {
-    if (window.showToast) showToast("Please select a resume first.", "warning");
+    if (window.showToast) window.showToast("Please select a resume first.", "warning");
     return;
   }
 
@@ -433,9 +433,16 @@ async function loadCandidateJobMatches() {
     sessionStorage.setItem("bm_matched_job_ids", JSON.stringify(matches.map(m => String(m.job_id))));
   } catch { }
 
-  let allJobs = Array.isArray(jobsRes)
-    ? jobsRes
-    : (() => { try { return JSON.parse(jobsRes?.body || "[]"); } catch { return []; } })();
+  // /jobs returns either a bare array  OR  { jobs: [...], next_key }
+  // Handle all three shapes: array, wrapped object, or stringified body.
+  let allJobs = (() => {
+    if (Array.isArray(jobsRes)) return jobsRes;
+    if (Array.isArray(jobsRes?.jobs)) return jobsRes.jobs;
+    try {
+      const parsed = JSON.parse(jobsRes?.body || "[]");
+      return Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
+    } catch { return []; }
+  })();
 
   const llmResults = await enrichMatchesWithLLM(matches, allJobs, candidateId);
   const llmMap     = {};
@@ -448,7 +455,12 @@ async function loadCandidateJobMatches() {
     return ra - rb;
   });
 
-  grid.innerHTML = "";
+  // FIX: Build cards into an array and set innerHTML once at the end.
+  // The original code used `grid.innerHTML +=` inside a loop which destroys
+  // and recreates ALL existing DOM nodes on every iteration — this breaks
+  // any event listeners already attached and is O(n²) for large lists.
+  const cardFragments = [];
+  window.__jobCardData = window.__jobCardData || {};
 
   ranked.forEach((match, idx) => {
     const job      = allJobs.find(j => j.job_id === match.job_id) || match || {};
@@ -470,15 +482,34 @@ async function loadCandidateJobMatches() {
     const isTopPick = idx === 0;
 
     const cardData = {
-      job_id:      job.job_id || match.job_id,
-      title:       match.title || job.title || "Job Title",
+      job_id:       job.job_id || match.job_id,
+      // FIX: Store the Firestore doc id separately so applyToJob() receives it
+      // correctly; job.job_id is the backend numeric/string id, which can differ
+      // from the Firestore document id.
+      firestore_id: job.id || job.firestore_id || job.job_id || match.job_id,
+      title:        match.title || job.title || "Job Title",
       company,
       location,
       salary,
       percent,
-      description: job.description || "",
-      apply_url:   job.apply_url || match.apply_url || ""
+      description:  job.description || "",
+      apply_url:    job.apply_url || match.apply_url || "",
+      // FIX: Normalise source to lowercase so "BeyondMatch", "beyondmatch",
+      // "beyond_match" etc. all route correctly to applyToJob().
+      // The original strict equality check `=== "beyondmatch"` missed any
+      // variation in casing, silently sending internal jobs down the external
+      // link path and skipping applyToJob() entirely.
+      source:       (job.source || match.source || "").toLowerCase(),
+      recruiter_id: job.recruiter_id || match.recruiter_id || ""
     };
+
+    // Store job data in a global map keyed by job_id.
+    // FIX: The original code used JSON.stringify(job) inside the onclick
+    // attribute string, which broke whenever title or description contained
+    // single quotes or double quotes — the HTML attribute would terminate
+    // early and the JS parser would throw. Reading from __jobCardData via
+    // data-savejobid avoids all quoting issues entirely.
+    window.__jobCardData[cardData.job_id] = { ...cardData, candidateId };
 
     // Match ring geometry (SVG circle, r=18, circumference≈113)
     const pct      = parseFloat(percent);
@@ -486,7 +517,7 @@ async function loadCandidateJobMatches() {
     const offset   = circ - (pct / 100) * circ;
     const ringColor = pct >= 80 ? "#4ade80" : pct >= 60 ? "#7aa2ff" : pct >= 40 ? "#fbbf24" : "#f87171";
 
-    grid.innerHTML += `
+    cardFragments.push(`
       <div class="match-card ${isTopPick ? "top-pick" : ""}"
            style="animation-delay:${idx * 60}ms"
            data-location="${location}"
@@ -532,13 +563,36 @@ async function loadCandidateJobMatches() {
         ${aiInsight ? `<div class="match-insight">✦ ${aiInsight}</div>` : ""}
 
         <div class="match-actions">
-          <button class="match-btn apply" onclick='openApplyLink("${cardData.apply_url || "#"}")'>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-            </svg>
-            Apply
-          </button>
-          <button class="match-btn save" data-savejobid="${cardData.job_id}" onclick='handleSaveJob(this, ${JSON.stringify(job)}, "${candidateId}")'>
+          ${cardData.source === "beyondmatch"
+            // FIX: Use data-* attributes instead of inline JSON/function args.
+            // Pass firestore_id as data-firestore-id so job_firestore_id is
+            // stored correctly in Firestore. _applyClick() reads all params
+            // from the element — no quoting or escaping issues.
+            ? `<button class="match-btn apply"
+                 data-apply-job="${cardData.job_id}"
+                 data-job-title="${cardData.title.replace(/"/g, '&quot;')}"
+                 data-recruiter-id="${cardData.recruiter_id}"
+                 data-firestore-id="${cardData.firestore_id}"
+                 data-candidate-id="${candidateId}"
+                 onclick="window._applyClick(this)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Apply
+              </button>`
+            : `<button class="match-btn apply"
+                 data-apply-url="${(cardData.apply_url || '#').replace(/"/g, '&quot;')}"
+                 onclick="openApplyLink(this.dataset.applyUrl)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Apply
+              </button>`
+          }
+          <button class="match-btn save"
+                  data-savejobid="${cardData.job_id}"
+                  data-candidate-id="${candidateId}"
+                  onclick="handleSaveJob(this, window.__jobCardData[this.dataset.savejobid], this.dataset.candidateId)">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
@@ -552,14 +606,22 @@ async function loadCandidateJobMatches() {
           </button>
         </div>
       </div>
-    `;
-
-    window.__jobCardData          = window.__jobCardData || {};
-    window.__jobCardData[cardData.job_id] = { ...cardData, candidateId };
+    `);
   });
+
+  // Write all cards in one shot — avoids the O(n²) innerHTML += loop
+  grid.innerHTML = cardFragments.join("");
 
   setupMatchFilters();
   setupKnowMoreButtons(candidateId);
+
+  // Mark any jobs the candidate has already applied to (greys out button)
+  if (typeof window.markApplyButtons === "function") {
+    window.markApplyButtons(ranked.map(m => ({
+      job_id:       m.job_id,
+      recruiter_id: (allJobs.find(j => j.job_id === m.job_id) || m).recruiter_id || ""
+    })));
+  }
 }
 
 
@@ -636,7 +698,7 @@ async function saveJobToFirebase(job, candidateId) {
   if (!user) return;
 
   if (!job?.job_id) {
-    if (window.showToast) showToast("Job data is missing. Please try again.", "error");
+    if (window.showToast) window.showToast("Job data is missing. Please try again.", "error");
     return;
   }
 
@@ -660,7 +722,7 @@ async function saveJobToFirebase(job, candidateId) {
 
   trackInteraction({ job_id: job.job_id, candidate_id: candidateId, action: "shortlist" });
 
-  if (window.showToast) showToast("Job saved to your list.", "success");
+  if (window.showToast) window.showToast("Job saved to your list.", "success");
 }
 
 
@@ -686,11 +748,92 @@ async function trackInteraction({ job_id, candidate_id, action }) {
 ========================================================= */
 function openApplyLink(url) {
   if (!url || url === "#" || url.trim() === "") {
-    if (window.showToast) showToast("No application link available for this job.", "warning");
+    if (window.showToast) window.showToast("No application link available for this job.", "warning");
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+
+/* =========================================================
+   HANDLE APPLY — BEYONDMATCH JOBS
+   Called when the Apply button is clicked on a BeyondMatch-
+   posted job. Delegates to applyToJob() from apply-job.js,
+   then updates the button state on success.
+   For external jobs the old openApplyLink() path is unchanged.
+========================================================= */
+async function handleApplyBeyondMatch(btn, jobId, jobTitle, recruiterId, candidateId, jobFirestoreId) {
+  if (btn.disabled) return;                          // already applied
+  btn.disabled      = true;
+  btn.style.opacity = "0.7";
+  btn.textContent   = "Applying…";
+
+  let success = false;
+  try {
+    // applyToJob is loaded from apply-job.js (type=module, same page)
+    if (typeof window.applyToJob !== "function") {
+      throw new Error("applyToJob not loaded — make sure apply-job.js is included.");
+    }
+    // FIX: Pass jobFirestoreId as the 4th argument.
+    // The original caller omitted this arg, so job_firestore_id in every
+    // application document was always set to jobId instead of the real
+    // Firestore document id.
+    success = await window.applyToJob(jobId, jobTitle, recruiterId, jobFirestoreId);
+  } catch (err) {
+    console.error("handleApplyBeyondMatch:", err);
+    if (window.showToast) window.showToast("Application failed. Please try again.", "error");
+  }
+
+  if (success) {
+    btn.innerHTML = `
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      Applied`;
+    btn.style.opacity = "0.6";
+    btn.style.cursor  = "default";
+    // Track the interaction with the backend analytics endpoint
+    trackInteraction({ job_id: jobId, candidate_id: candidateId, action: "apply" });
+  } else {
+    // Re-enable so they can retry (unless already-applied toast was shown)
+    btn.disabled      = false;
+    btn.style.opacity = "1";
+    btn.innerHTML = `
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      Apply`;
+  }
+}
+
+window.handleApplyBeyondMatch = handleApplyBeyondMatch;
+
+/* ─────────────────────────────────────────────────
+   _applyClick
+   FIX: Reads all apply params from data-* attributes instead of
+   embedding them as inline function arguments. The old approach used
+   JSON.stringify(job) directly in the onclick="..." string, which
+   broke whenever job titles or descriptions contained quotes — the
+   HTML attribute terminated early and the JS parser threw a SyntaxError.
+   ───────────────────────────────────────────────── */
+window._applyClick = function (btn) {
+  const jobId       = btn.dataset.applyJob;
+  const jobTitle    = btn.dataset.jobTitle;
+  const recruiterId = btn.dataset.recruiterId;
+  const firestoreId = btn.dataset.firestoreId;
+  const candidateId = btn.dataset.candidateId;
+
+  // Redirect to cand_actions.html with job context as query params.
+  // The apply form there collects an optional note and then calls applyToJob().
+  const params = new URLSearchParams({
+    job_id:       jobId       || "",
+    title:        jobTitle    || "",
+    rec:          recruiterId || "",
+    firestore_id: firestoreId || "",
+    candidate_id: candidateId || ""
+  });
+  window.location.href = `cand_actions.html?${params.toString()}`;
+};
 
 
 /* =========================================================

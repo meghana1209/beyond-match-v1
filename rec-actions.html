@@ -4,15 +4,307 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Recruiter Actions – BeyondMatch</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <link rel="stylesheet" href="recruiter-matches.css" />
   <link rel="stylesheet" href="skeleton-loader.css" />
+
+<style>
+/* ── page layout ── */
+.page-title { margin-bottom: 20px; }
+.page-title h1 { font-size: 22px; font-weight: 700; color: #e2e8f0; margin: 0 0 4px; }
+.page-title p  { font-size: 13px; color: #6b7fa8; margin: 0; }
+
+/* ── top bar ── */
+.actions-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+}
+.actions-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-pill {
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 6px 14px; border-radius: 20px;
+  border: 1px solid rgba(122,162,255,.15);
+  background: transparent; color: #6b7fa8;
+  cursor: pointer; transition: all .18s;
+}
+.filter-pill.active {
+  background: rgba(122,162,255,.12);
+  border-color: rgba(122,162,255,.35);
+  color: #7aa2ff;
+}
+.filter-pill:hover:not(.active) { border-color: rgba(122,162,255,.3); color: #a0aec0; }
+
+/* ── notif bell ── */
+.notif-btn {
+  position: relative; background: rgba(122,162,255,.07);
+  border: 1px solid rgba(122,162,255,.15);
+  border-radius: 10px; padding: 7px 12px;
+  color: #7aa2ff; cursor: pointer; font-size: 16px;
+  transition: all .18s; display: flex; align-items: center; gap: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+}
+.notif-btn:hover { background: rgba(122,162,255,.14); }
+.notif-badge {
+  position: absolute; top: -5px; right: -5px;
+  background: #f87171; color: #fff;
+  font-size: 10px; font-weight: 700;
+  width: 17px; height: 17px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #080c18;
+}
+
+/* ── search ── */
+.search-wrap { position: relative; }
+.search-wrap input {
+  background: rgba(122,162,255,.05);
+  border: 1px solid rgba(122,162,255,.12);
+  border-radius: 10px; padding: 8px 14px 8px 34px;
+  font-family: inherit; font-size: 13px; color: #e2e8f0;
+  outline: none; width: 200px; transition: border .18s;
+}
+.search-wrap input::placeholder { color: #4a5580; }
+.search-wrap input:focus { border-color: rgba(122,162,255,.35); }
+.search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); }
+
+/* ── pipeline tabs ── */
+.pipeline-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.ptab {
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid rgba(122,162,255,.12);
+  background: transparent; color: #6b7fa8;
+  cursor: pointer; transition: all .18s; display: flex; align-items: center; gap: 6px;
+}
+.ptab.active { background: rgba(122,162,255,.12); border-color: rgba(122,162,255,.3); color: #7aa2ff; }
+.ptab:hover:not(.active) { color: #a0aec0; border-color: rgba(122,162,255,.2); }
+.ptab-count {
+  background: rgba(122,162,255,.18); border-radius: 10px;
+  padding: 1px 6px; font-size: 10px; font-weight: 700;
+}
+.ptab.active .ptab-count { background: rgba(122,162,255,.25); }
+
+/* ── application card ── */
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+.app-card {
+  background: #0c1121;
+  border: 1px solid rgba(122,162,255,.10);
+  border-radius: 14px; padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  transition: border-color .18s, box-shadow .18s;
+  position: relative;
+}
+.app-card:hover { border-color: rgba(122,162,255,.22); box-shadow: 0 4px 24px rgba(0,0,0,.25); }
+.app-card.unread::before {
+  content: ''; position: absolute; top: 16px; right: 16px;
+  width: 7px; height: 7px; border-radius: 50%; background: #7aa2ff;
+}
+
+.app-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.app-cand-name { font-size: 15px; font-weight: 700; color: #e2e8f0; margin: 0 0 3px; }
+.app-cand-role { font-size: 12px; color: #6b7fa8; }
+.app-status-chip {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+}
+.chip-applied     { background: rgba(122,162,255,.12); color: #7aa2ff; border: 1px solid rgba(122,162,255,.25); }
+.chip-reviewing   { background: rgba(251,191,36,.10);  color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+.chip-shortlisted { background: rgba(192,132,252,.12); color: #c084fc; border: 1px solid rgba(192,132,252,.25); }
+.chip-interview   { background: rgba(56,189,248,.10);  color: #38bdf8; border: 1px solid rgba(56,189,248,.25); }
+.chip-hired       { background: rgba(74,222,128,.10);  color: #4ade80; border: 1px solid rgba(74,222,128,.25); }
+.chip-rejected    { background: rgba(248,113,113,.10); color: #f87171; border: 1px solid rgba(248,113,113,.25); }
+
+.app-job-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #a0aec0;
+}
+.app-job-name { font-weight: 600; color: #c9d5e8; }
+
+.app-meta { display: flex; gap: 12px; font-size: 11px; color: #4a5580; flex-wrap: wrap; }
+
+/* note preview */
+.app-note-preview {
+  font-size: 12px; color: #6b7fa8; font-style: italic;
+  background: rgba(122,162,255,.04); border-left: 2px solid rgba(122,162,255,.2);
+  padding: 6px 10px; border-radius: 0 6px 6px 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* action buttons */
+.app-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.app-btn {
+  font-family: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 6px 13px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(122,162,255,.18);
+  background: transparent; color: #7aa2ff;
+  transition: all .18s; display: flex; align-items: center; gap: 5px;
+}
+.app-btn:hover { background: rgba(122,162,255,.10); border-color: rgba(122,162,255,.35); }
+.app-btn.danger { color: #f87171; border-color: rgba(248,113,113,.18); }
+.app-btn.danger:hover { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.35); }
+.app-btn.success { color: #4ade80; border-color: rgba(74,222,128,.18); }
+.app-btn.success:hover { background: rgba(74,222,128,.08); border-color: rgba(74,222,128,.35); }
+
+
+/* empty state */
+.empty-state {
+  grid-column: 1/-1; text-align: center; padding: 60px 20px;
+  color: #4a5580;
+}
+.empty-state svg { margin-bottom: 16px; opacity: .4; }
+.empty-state h3 { font-size: 15px; color: #6b7fa8; margin: 0 0 6px; }
+.empty-state p  { font-size: 13px; margin: 0; }
+
+
+/* ── note / profile modal ── */
+.bm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.78);
+  backdrop-filter: blur(6px); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box;
+}
+.bm-modal {
+  background: #0f1220; border: 1px solid rgba(122,162,255,.15);
+  border-radius: 16px; width: 100%; max-width: 520px;
+  max-height: 88vh; overflow-y: auto;
+  padding: 28px; box-sizing: border-box;
+  position: relative; color: #e2e8f0;
+}
+.bm-modal-title {
+  font-size: 11px; color: #7aa2ff; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px;
+}
+.bm-modal h2 { font-size: 19px; color: #e2e8f0; margin: 0 0 20px; }
+.bm-modal-close {
+  position: absolute; top: 16px; right: 18px;
+  background: none; border: none; color: #4a5580;
+  font-size: 20px; cursor: pointer; line-height: 1; transition: color .15s;
+}
+.bm-modal-close:hover { color: #e2e8f0; }
+
+.bm-textarea {
+  width: 100%; box-sizing: border-box;
+  background: #090e1c; border: 1px solid rgba(122,162,255,.15);
+  border-radius: 10px; padding: 12px 14px;
+  font-family: inherit; font-size: 13.5px; color: #e2e8f0;
+  resize: vertical; min-height: 100px; outline: none;
+  transition: border .18s;
+}
+.bm-textarea:focus { border-color: rgba(122,162,255,.35); }
+.bm-textarea::placeholder { color: #4a5580; }
+
+.bm-btn-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.bm-btn {
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  padding: 9px 20px; border-radius: 9px; cursor: pointer;
+  border: 1px solid rgba(122,162,255,.2);
+  background: transparent; color: #7aa2ff; transition: all .18s;
+}
+.bm-btn:hover { background: rgba(122,162,255,.1); }
+.bm-btn.primary {
+  background: rgba(122,162,255,.14);
+  border-color: rgba(122,162,255,.4); color: #7aa2ff;
+}
+.bm-btn.primary:hover { background: rgba(122,162,255,.22); }
+
+/* ── notif panel ── */
+.notif-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 340px; background: #0a0e1a;
+  border-left: 1px solid rgba(122,162,255,.12);
+  z-index: 500; transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.22,1,.36,1);
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 40px rgba(0,0,0,.5);
+}
+.notif-panel.open { transform: translateX(0); }
+.notif-panel-head {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid rgba(122,162,255,.08);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.notif-panel-head h3 { font-size: 15px; color: #e2e8f0; margin: 0; font-weight: 700; }
+.notif-panel-close {
+  background: none; border: none; color: #4a5580;
+  font-size: 20px; cursor: pointer; transition: color .15s;
+}
+.notif-panel-close:hover { color: #e2e8f0; }
+.notif-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.notif-item {
+  background: #0c1121; border: 1px solid rgba(122,162,255,.08);
+  border-radius: 10px; padding: 12px 14px;
+  font-size: 12.5px; color: #a0aec0; line-height: 1.5;
+  cursor: pointer; transition: border-color .15s;
+}
+.notif-item:hover { border-color: rgba(122,162,255,.2); }
+.notif-item.unread { border-color: rgba(122,162,255,.18); background: rgba(122,162,255,.04); }
+.notif-item strong { color: #e2e8f0; }
+.notif-item .notif-time { font-size: 11px; color: #4a5580; margin-top: 4px; }
+.notif-empty { padding: 40px 20px; text-align: center; color: #4a5580; font-size: 13px; }
+
+/* ── profile info block ── */
+.prof-row { display: flex; gap: 12px; flex-direction: column; margin-bottom: 16px; }
+.prof-field label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #4a5580; margin-bottom: 4px; display: block; }
+.prof-field p { font-size: 13.5px; color: #c9d5e8; margin: 0; line-height: 1.5; }
+
+/* timeline */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.tl-item {
+  display: flex; gap: 14px; align-items: flex-start; padding-bottom: 16px;
+  position: relative;
+}
+.tl-item:not(:last-child)::before {
+  content: ''; position: absolute; left: 10px; top: 22px;
+  width: 1px; height: calc(100% - 6px);
+  background: rgba(122,162,255,.12);
+}
+.tl-dot {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; margin-top: 2px;
+  border: 2px solid currentColor;
+}
+.tl-body { flex: 1; }
+.tl-label { font-size: 12px; font-weight: 600; color: #c9d5e8; }
+.tl-time  { font-size: 11px; color: #4a5580; margin-top: 2px; }
+.tl-note  { font-size: 12px; color: #6b7fa8; margin-top: 4px; font-style: italic; }
+
+/* skeleton cards */
+.skeleton-candidate-card {
+  background: #0c1121; border: 1px solid rgba(122,162,255,.08);
+  border-radius: 14px; padding: 18px 20px;
+}
+.skeleton-title   { background: rgba(122,162,255,.07); border-radius: 6px; height: 14px; }
+.skeleton-subtitle{ background: rgba(122,162,255,.05); border-radius: 6px; height: 11px; }
+.skeleton-chip    { background: rgba(122,162,255,.06); border-radius: 20px; width: 60px; height: 18px; }
+.skeleton-btn     { background: rgba(122,162,255,.06); border-radius: 8px; height: 30px; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+.skeleton-candidate-card * { animation: pulse 1.6s ease infinite; }
+
+/* mark-all-read */
+.mark-read-btn {
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  background: none; border: none; color: #7aa2ff; cursor: pointer;
+  padding: 0; opacity: .7; transition: opacity .15s;
+}
+.mark-read-btn:hover { opacity: 1; }
+</style>
 </head>
 <body>
 
 <aside class="sidebar">
- <a href="/rec-actions.html" style="text-decoration:none;"><h2 class="cand-brand">BeyondMatch</h2></a>
+  <a href="/rec-actions.html" style="text-decoration:none;"><h2 class="cand-brand">BeyondMatch</h2></a>
   <nav class="menu">
     <a href="rec-dash.html"     class="menu-item">Dashboard</a>
+    <a href="rec-postjob.html"  class="menu-item">Post Job</a>
     <a href="rec-jobs.html"     class="menu-item">My Jobs</a>
     <a href="cand-matches.html" class="menu-item">Candidate Matches</a>
     <a href="rec-actions.html"  class="menu-item active">Recruiter Actions</a>
@@ -25,14 +317,95 @@
 
   <div class="page-title">
     <h1>Recruiter Actions</h1>
-    <p>Candidate profiles and pipeline status at a glance.</p>
+    <p>Manage applications and candidate pipeline for your posted jobs.</p>
   </div>
 
-  <div id="actionsContainer" class="actions-grid"></div>
+  <!-- top bar -->
+  <div class="actions-topbar">
+    <div class="pipeline-tabs" id="pipelineTabs">
+      <button class="ptab active" data-status="all">All <span class="ptab-count" id="cnt-all">0</span></button>
+      <button class="ptab" data-status="applied">Applied <span class="ptab-count" id="cnt-applied">0</span></button>
+      <button class="ptab" data-status="reviewing">Reviewing <span class="ptab-count" id="cnt-reviewing">0</span></button>
+      <button class="ptab" data-status="shortlisted">Shortlisted <span class="ptab-count" id="cnt-shortlisted">0</span></button>
+      <button class="ptab" data-status="interview">Interview <span class="ptab-count" id="cnt-interview">0</span></button>
+      <button class="ptab" data-status="hired">Hired <span class="ptab-count" id="cnt-hired">0</span></button>
+      <button class="ptab" data-status="rejected">Rejected <span class="ptab-count" id="cnt-rejected">0</span></button>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4a5580" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Search candidate…" />
+      </div>
+      <button class="notif-btn" id="notifBtn" onclick="toggleNotifPanel()">
+        🔔 Notifications
+        <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- application grid -->
+  <div id="actionsContainer" class="app-grid"></div>
 
 </main>
 
-<!-- Instant skeletons -->
+<!-- ══ Notification Panel ══ -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-panel-head">
+    <h3>🔔 Notifications</h3>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button class="mark-read-btn" onclick="markAllRead()">Mark all read</button>
+      <button class="notif-panel-close" onclick="toggleNotifPanel()">✕</button>
+    </div>
+  </div>
+  <div class="notif-list" id="notifList">
+    <div class="notif-empty">No notifications yet.</div>
+  </div>
+</div>
+
+<!-- ══ Note Modal ══ -->
+<div id="noteOverlay" class="bm-overlay" style="display:none" onclick="closeNoteModal(event)">
+  <div class="bm-modal">
+    <button class="bm-modal-close" onclick="document.getElementById('noteOverlay').style.display='none'">✕</button>
+    <div class="bm-modal-title">Recruiter Note</div>
+    <h2 id="noteModalName" style="margin-bottom:16px;">Candidate</h2>
+
+    <!-- Candidate cover note — read-only, only shown if present -->
+    <div id="coverNoteSection" style="display:none;margin-bottom:18px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:6px;">
+        Candidate's Cover Note
+      </div>
+      <div id="coverNoteText"
+        style="background:rgba(122,162,255,.04);border:1px solid rgba(122,162,255,.10);
+               border-left:3px solid rgba(122,162,255,.3);border-radius:0 8px 8px 0;
+               padding:10px 14px;font-size:13px;color:#a0aec0;font-style:italic;line-height:1.55;">
+      </div>
+    </div>
+
+    <!-- Recruiter private note -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;margin-bottom:6px;">
+      Your Private Note
+    </div>
+    <textarea class="bm-textarea" id="noteTextarea"
+      placeholder="Add your private notes about this candidate — interview impressions, follow-up reminders, red flags, etc."></textarea>
+    <div style="font-size:11px;color:#4a5580;margin-top:6px;">🔒 Only visible to you</div>
+
+    <div class="bm-btn-row">
+      <button class="bm-btn" onclick="document.getElementById('noteOverlay').style.display='none'">Cancel</button>
+      <button class="bm-btn primary" onclick="saveNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Profile Modal ══ -->
+<div id="profileOverlay" class="bm-overlay" style="display:none" onclick="closeProfileModal(event)">
+  <div class="bm-modal" style="max-width:600px;">
+    <button class="bm-modal-close" onclick="document.getElementById('profileOverlay').style.display='none'">✕</button>
+    <div class="bm-modal-title">Candidate Profile</div>
+    <div id="profileContent"></div>
+  </div>
+</div>
+
+<!-- instant skeletons -->
 <script>
 (function() {
   const grid = document.getElementById('actionsContainer');
@@ -46,13 +419,492 @@
         </div>
         <div class="skeleton-subtitle" style="width:80%;height:12px;margin-bottom:6px;"></div>
         <div class="skeleton-subtitle" style="width:60%;height:12px;margin-bottom:16px;"></div>
-        <div style="display:flex;justify-content:flex-end;">
+        <div style="display:flex;gap:8px;">
+          <div class="skeleton-btn" style="width:90px;"></div>
           <div class="skeleton-btn" style="width:80px;"></div>
+          <div class="skeleton-btn" style="width:70px;"></div>
         </div>
       </div>`;
   }
   grid.innerHTML = Array(6).fill(null).map(skel).join('');
 })();
+</script>
+
+<script type="module">
+import { analytics, auth, db } from "./auth.js";
+import {
+  collection, getDocs, addDoc, query, where,
+  doc, getDoc, updateDoc, onSnapshot,
+  serverTimestamp, orderBy, limit
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+// Mark the container immediately — this runs synchronously before any await,
+// so api.js's initRecruiterActionsPage() sees it and bails out before
+// painting the old _renderContactedList cards.
+document.getElementById('actionsContainer').dataset.managed = 'true';
+
+/* ─── state ─── */
+let allApplications = [];
+let activeStatus    = 'all';
+let searchQuery     = '';
+let currentNoteAppId = null;
+let unsub = null;
+let _renderGen = 0; // increments each snapshot; stale async runs are discarded
+
+const STATUSES = ['applied','reviewing','shortlisted','interview','hired','rejected'];
+const STATUS_LABELS = {
+  applied: 'Applied', reviewing: 'Reviewing', shortlisted: 'Shortlisted',
+  interview: 'Interview', hired: 'Hired', rejected: 'Rejected'
+};
+
+/* ─── init ─── */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  await loadApplications(user.uid);
+  subscribeNotifications(user.uid);
+});
+
+/* ─── load applications ─── */
+async function loadApplications(recruiterId) {
+  // No orderBy here — sorting in JS avoids needing a composite index.
+  // Firestore only needs a single-field index for the where() clause.
+  const q = query(
+    collection(db, 'applications'),
+    where('recruiter_id', '==', recruiterId)
+  );
+
+  // live listener
+  if (unsub) unsub();
+  unsub = onSnapshot(q, async (snap) => {
+    // Bump generation — any older async run will see its gen is stale and bail.
+    const myGen = ++_renderGen;
+
+    // Immediately replace whatever is in the container with fresh skeletons
+    // so old cached cards never show during the async fetch loop below.
+    const container = document.getElementById('actionsContainer');
+    if (container) {
+      const skelCount = Math.min(Math.max(snap.docs.length, 1), 6);
+      function skel() {
+        return `
+          <div class="skeleton-candidate-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div class="skeleton-title" style="width:55%;height:16px;"></div>
+              <div class="skeleton-chip" style="width:70px;height:20px;border-radius:6px;"></div>
+            </div>
+            <div class="skeleton-subtitle" style="width:80%;height:12px;margin-bottom:6px;"></div>
+            <div class="skeleton-subtitle" style="width:60%;height:12px;margin-bottom:16px;"></div>
+            <div style="display:flex;gap:8px;">
+              <div class="skeleton-btn" style="width:90px;"></div>
+              <div class="skeleton-btn" style="width:80px;"></div>
+              <div class="skeleton-btn" style="width:70px;"></div>
+            </div>
+          </div>`;
+      }
+      container.innerHTML = Array(skelCount).fill(null).map(skel).join('');
+    }
+
+    const apps = [];
+    const jobCache = {};
+    const candCache = {};
+
+    for (const docSnap of snap.docs) {
+      const d = docSnap.data();
+      const appId = docSnap.id;
+
+      // fetch job title if not cached
+      if (!jobCache[d.job_id]) {
+        try {
+          const jSnap = await getDoc(doc(db, 'posted_jobs', d.job_id));
+          jobCache[d.job_id] = jSnap.exists() ? jSnap.data() : { title: d.job_title || 'Unknown Job' };
+        } catch { jobCache[d.job_id] = { title: d.job_title || 'Unknown Job' }; }
+      }
+      // fetch candidate
+      if (!candCache[d.candidate_id]) {
+        try {
+          const cSnap = await getDoc(doc(db, 'candidates', d.candidate_id));
+          candCache[d.candidate_id] = cSnap.exists() ? cSnap.data() : {};
+        } catch { candCache[d.candidate_id] = {}; }
+      }
+
+      apps.push({
+        id: appId,
+        ...d,
+        jobTitle: jobCache[d.job_id]?.title || d.job_title || 'Unknown Job',
+        candidateName: candCache[d.candidate_id]?.name || d.candidate_name || 'Unknown',
+        candidateRole: candCache[d.candidate_id]?.applied_role || '',
+        candidateEmail: candCache[d.candidate_id]?.email || d.candidate_email || '',
+        resumeText: candCache[d.candidate_id]?.resume_text || '',
+        // candidate_user_id is the Firebase UID — needed for notifications
+        candidateUserUid: d.candidate_user_id || null,
+      });
+    }
+
+    // Sort newest-first in JS (no Firestore composite index needed)
+    apps.sort((a, b) => {
+      const ta = a.applied_at?.toMillis ? a.applied_at.toMillis() : 0;
+      const tb = b.applied_at?.toMillis ? b.applied_at.toMillis() : 0;
+      return tb - ta;
+    });
+
+    // If a newer snapshot fired while we were awaiting, discard this stale result.
+    if (myGen !== _renderGen) return;
+
+    allApplications = apps;
+    updateCounts();
+    renderCards();
+  });
+}
+
+/* ─── counts ─── */
+function updateCounts() {
+  document.getElementById('cnt-all').textContent = allApplications.length;
+  STATUSES.forEach(s => {
+    const el = document.getElementById(`cnt-${s}`);
+    if (el) el.textContent = allApplications.filter(a => a.status === s).length;
+  });
+}
+
+/* ─── render ─── */
+function renderCards() {
+  const container = document.getElementById('actionsContainer');
+  let apps = allApplications;
+
+  if (activeStatus !== 'all') apps = apps.filter(a => a.status === activeStatus);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    apps = apps.filter(a =>
+      a.candidateName.toLowerCase().includes(q) ||
+      a.jobTitle.toLowerCase().includes(q) ||
+      (a.candidateRole || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (!apps.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <h3>No applications ${activeStatus !== 'all' ? `in "${STATUS_LABELS[activeStatus]}"` : ''}</h3>
+        <p>${activeStatus === 'all' ? 'Applications from candidates will appear here when they apply to your jobs.' : 'No candidates at this stage yet.'}</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = apps.map(app => buildCard(app)).join('');
+  attachCardEvents();
+}
+
+function buildCard(app) {
+  const status = app.status || 'applied';
+  const chipClass = `chip-${status}`;
+  const timeAgo = app.applied_at?.toDate ? timeSince(app.applied_at.toDate()) : 'Recently';
+  // Candidate cover note (read-only, italic)
+  const coverPreview = app.note
+    ? `<div class="app-note-preview" style="border-left-color:rgba(122,162,255,.2);color:#6b7fa8;">
+        💬 ${escHtml(app.note.length > 90 ? app.note.slice(0,90)+'…' : app.note)}
+       </div>`
+    : '';
+  // Recruiter private note (distinct colour)
+  const recNotePreview = app.rec_note
+    ? `<div class="app-note-preview" style="border-left-color:rgba(192,132,252,.35);color:#c084fc;font-style:normal;">
+        📝 ${escHtml(app.rec_note.length > 90 ? app.rec_note.slice(0,90)+'…' : app.rec_note)}
+       </div>`
+    : '';
+  const unreadClass = app.rec_unread ? 'unread' : '';
+
+  return `
+    <div class="app-card ${unreadClass}" data-id="${app.id}">
+      <div class="app-card-top">
+        <div>
+          <div class="app-cand-name">${escHtml(app.candidateName)}</div>
+          <div class="app-cand-role">${escHtml(app.candidateRole || 'Candidate')}</div>
+        </div>
+        <span class="app-status-chip ${chipClass}">${STATUS_LABELS[status]}</span>
+      </div>
+
+      <div class="app-job-row">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        <span class="app-job-name">${escHtml(app.jobTitle)}</span>
+      </div>
+
+      <div class="app-meta">
+        <span>📅 Applied ${timeAgo}</span>
+        ${app.candidateEmail ? `<span>✉ ${escHtml(app.candidateEmail)}</span>` : ''}
+      </div>
+
+      ${coverPreview}
+      ${recNotePreview}
+
+      <div class="app-actions">
+        <button class="app-btn" onclick="openProfile('${app.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Profile
+        </button>
+        <button class="app-btn" onclick="openNoteModal('${app.id}','${escAttr(app.candidateName)}','${escAttr(app.rec_note || '')}','${escAttr(app.note || '')}')">
+          📝 Note${app.rec_note ? ' ✎' : ''}
+        </button>
+        <button class="app-btn" onclick="openCandidateAnalysis('${app.candidate_id}','${escAttr(app.candidateName)}','${app.job_id}')">
+          🔍 Analyse
+        </button>
+      </div>
+    </div>`;
+}
+
+
+/* ─── set status ─── */
+window.setStatus = async function(appId, newStatus, candidateUserUid, candidateName, jobTitle) {
+  if (!window.showToast) return;
+  try {
+    await updateDoc(doc(db, 'applications', appId), {
+      status: newStatus,
+      updated_at: serverTimestamp(),
+      cand_unread: true   // candidate will see this as unread
+    });
+
+    // notify candidate — to_user_id MUST be the Firebase UID, not the candidate string ID
+    const user = auth.currentUser;
+    await addDoc(collection(db, 'notifications'), {
+      to_user_id:   candidateUserUid,
+      to_role:      'candidate',
+      from_role:    'recruiter',
+      type:         'status_update',
+      app_id:       appId,
+      job_title:    jobTitle,
+      new_status:   newStatus,
+      message:      `Your application for "${jobTitle}" has been moved to ${STATUS_LABELS[newStatus]}.`,
+      read:         false,
+      created_at:   serverTimestamp()
+    });
+
+    showToast(`Status updated to ${STATUS_LABELS[newStatus]}`, 'success');
+  } catch (err) {
+    showToast('Failed to update status', 'error');
+    console.error(err);
+  }
+};
+
+/* ─── note modal ─── */
+window.openNoteModal = function(appId, candName, recNote, coverNote) {
+  currentNoteAppId = appId;
+  document.getElementById('noteModalName').textContent = decodeAttr(candName);
+  // Recruiter's own note goes in the textarea
+  document.getElementById('noteTextarea').value = decodeAttr(recNote || '');
+  // Candidate's cover note shown read-only if present
+  const coverSection = document.getElementById('coverNoteSection');
+  const coverText = document.getElementById('coverNoteText');
+  const decoded = decodeAttr(coverNote || '');
+  if (decoded) {
+    coverText.textContent = decoded;
+    coverSection.style.display = 'block';
+  } else {
+    coverSection.style.display = 'none';
+  }
+  document.getElementById('noteOverlay').style.display = 'flex';
+};
+window.closeNoteModal = function(e) {
+  if (e.target === document.getElementById('noteOverlay'))
+    document.getElementById('noteOverlay').style.display = 'none';
+};
+window.saveNote = async function() {
+  if (!currentNoteAppId) return;
+  const recNote = document.getElementById('noteTextarea').value.trim();
+  try {
+    await updateDoc(doc(db, 'applications', currentNoteAppId), {
+      rec_note: recNote,
+      note_updated_at: serverTimestamp()
+    });
+    // update local cache so card preview refreshes without a full reload
+    const app = allApplications.find(a => a.id === currentNoteAppId);
+    if (app) app.rec_note = recNote;
+    renderCards();
+    document.getElementById('noteOverlay').style.display = 'none';
+    showToast('Note saved', 'success');
+  } catch {
+    showToast('Failed to save note', 'error');
+  }
+};
+
+/* ─── profile modal ─── */
+window.openProfile = async function(appId) {
+  const app = allApplications.find(a => a.id === appId);
+  if (!app) return;
+
+  // mark as read
+  if (app.rec_unread) {
+    await updateDoc(doc(db, 'applications', appId), { rec_unread: false }).catch(() => {});
+  }
+
+  const overlay = document.getElementById('profileOverlay');
+  const content = document.getElementById('profileContent');
+  overlay.style.display = 'flex';
+
+  // build timeline from status history
+  const history = app.status_history || [];
+  const timelineHTML = history.length ? history.map(h => `
+    <div class="tl-item">
+      <div class="tl-dot" style="color:${statusColor(h.status)}">${statusIcon(h.status)}</div>
+      <div class="tl-body">
+        <div class="tl-label">${STATUS_LABELS[h.status] || h.status}</div>
+        <div class="tl-time">${h.at?.toDate ? timeSince(h.at.toDate()) : ''}</div>
+        ${h.note ? `<div class="tl-note">"${escHtml(h.note)}"</div>` : ''}
+      </div>
+    </div>`).join('') :
+    `<div class="tl-item">
+      <div class="tl-dot" style="color:${statusColor(app.status || 'applied')}">${statusIcon(app.status || 'applied')}</div>
+      <div class="tl-body">
+        <div class="tl-label">${STATUS_LABELS[app.status || 'applied']}</div>
+        <div class="tl-time">Current status</div>
+      </div>
+    </div>`;
+
+  content.innerHTML = `
+    <h2 style="margin:0 0 4px;font-size:20px;color:#e2e8f0;">${escHtml(app.candidateName)}</h2>
+    <p style="margin:0 0 20px;color:#6b7fa8;font-size:13px;">${escHtml(app.candidateRole || 'Candidate')}</p>
+
+    <div class="prof-row">
+      ${app.candidateEmail ? `<div class="prof-field"><label>Email</label><p>${escHtml(app.candidateEmail)}</p></div>` : ''}
+      <div class="prof-field"><label>Applied For</label><p>${escHtml(app.jobTitle)}</p></div>
+      <div class="prof-field"><label>Applied</label><p>${app.applied_at?.toDate ? app.applied_at.toDate().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : 'Unknown'}</p></div>
+    </div>
+
+    ${app.note ? `
+    <div style="margin-bottom:18px;">
+      <div class="prof-field"><label>Candidate's Cover Note</label></div>
+      <div class="app-note-preview" style="white-space:normal;font-style:italic;color:#a0aec0;">${escHtml(app.note)}</div>
+    </div>` : ''}
+
+    ${app.rec_note ? `
+    <div style="margin-bottom:18px;">
+      <div class="prof-field"><label>Your Private Note</label></div>
+      <div class="app-note-preview" style="white-space:normal;border-left-color:rgba(192,132,252,.4);color:#c084fc;font-style:normal;">${escHtml(app.rec_note)}</div>
+    </div>` : ''}
+
+    ${app.resumeText ? `
+    <div style="margin-bottom:18px;">
+      <div class="prof-field"><label>Resume Snippet</label></div>
+      <div style="background:#090e1c;border:1px solid rgba(122,162,255,.1);border-radius:10px;padding:12px 14px;font-size:12px;color:#a0aec0;line-height:1.6;max-height:120px;overflow-y:auto;">
+        ${escHtml(app.resumeText.slice(0, 600))}${app.resumeText.length > 600 ? '…' : ''}
+      </div>
+    </div>` : ''}
+
+    <div style="height:1px;background:rgba(122,162,255,.08);margin-bottom:18px;"></div>
+
+    <div class="prof-field" style="margin-bottom:12px;"><label>Application Timeline</label></div>
+    <div class="timeline">${timelineHTML}</div>
+
+    <div class="bm-btn-row" style="margin-top:20px;">
+      ${app.candidateEmail ? `
+      <button class="bm-btn" onclick="window.location.href='mailto:${escAttr(app.candidateEmail)}?subject=Re: Your application for ${escAttr(app.jobTitle)}'">
+        ✉ Email Candidate
+      </button>` : ''}
+      <button class="bm-btn primary" onclick="openCandidateAnalysis('${app.candidate_id}','${escAttr(app.candidateName)}','${app.job_id}')">
+        🔍 Deep Analysis
+      </button>
+    </div>
+  `;
+};
+window.closeProfileModal = function(e) {
+  if (e.target === document.getElementById('profileOverlay'))
+    document.getElementById('profileOverlay').style.display = 'none';
+};
+
+/* ─── notifications ─── */
+function subscribeNotifications(recruiterId) {
+  const q = query(
+    collection(db, 'notifications'),
+    where('to_user_id', '==', recruiterId),
+    where('to_role', '==', 'recruiter'),
+    orderBy('created_at', 'desc'),
+    limit(30)
+  );
+
+  onSnapshot(q, (snap) => {
+    const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const unread = notifs.filter(n => !n.read).length;
+
+    const badge = document.getElementById('notifBadge');
+    badge.textContent = unread;
+    badge.style.display = unread ? 'flex' : 'none';
+
+    const list = document.getElementById('notifList');
+    if (!notifs.length) {
+      list.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markNotifRead('${n.id}')">
+        <div>${n.message || 'New activity on your job.'}</div>
+        <div class="notif-time">${n.created_at?.toDate ? timeSince(n.created_at.toDate()) : 'Recently'}</div>
+      </div>`).join('');
+  });
+}
+
+window.markNotifRead = async function(notifId) {
+  await updateDoc(doc(db, 'notifications', notifId), { read: true }).catch(() => {});
+};
+window.markAllRead = async function() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const q = query(
+    collection(db, 'notifications'),
+    where('to_user_id', '==', user.uid),
+    where('read', '==', false)
+  );
+  const snap = await getDocs(q).catch(() => null);
+  if (!snap) return;
+  snap.docs.forEach(d => updateDoc(d.ref, { read: true }).catch(() => {}));
+};
+
+window.toggleNotifPanel = function() {
+  document.getElementById('notifPanel').classList.toggle('open');
+};
+
+/* ─── pipeline tab filter ─── */
+document.getElementById('pipelineTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.ptab');
+  if (!btn) return;
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeStatus = btn.dataset.status;
+  renderCards();
+});
+
+/* ─── search ─── */
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchQuery = e.target.value.trim();
+  renderCards();
+});
+
+/* ─── card events (analysis button already global) ─── */
+function attachCardEvents() { /* delegated above */ }
+
+/* ─── helpers ─── */
+function statusColor(s) {
+  return { applied:'#7aa2ff', reviewing:'#fbbf24', shortlisted:'#c084fc',
+           interview:'#38bdf8', hired:'#4ade80', rejected:'#f87171' }[s] || '#7aa2ff';
+}
+function statusIcon(s) {
+  return { applied:'●', reviewing:'◐', shortlisted:'★', interview:'◆', hired:'✓', rejected:'✕' }[s] || '●';
+}
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s || '').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+function decodeAttr(s) {
+  return String(s || '').replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+}
+function timeSince(date) {
+  const sec = Math.floor((new Date() - date) / 1000);
+  if (sec < 60)  return 'just now';
+  if (sec < 3600) return `${Math.floor(sec/60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
+  if (sec < 604800) return `${Math.floor(sec/86400)}d ago`;
+  return date.toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+}
+
+window.showToast = window.showToast || function(msg, type) { console.log(type, msg); };
 </script>
 
 <script type="module" src="auth.js"></script>

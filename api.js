@@ -540,7 +540,13 @@ function renderRecruiterJobs() {
 
   if (!filtered.length) { tableEl.innerHTML = "<p>No jobs found.</p>"; return; }
 
-  tableEl.innerHTML = filtered.map(job => `
+  tableEl.innerHTML = filtered.map(job => {
+    // Recruiters see "View Matches" → cand-matches.html pre-selecting this job
+    // and "Post Similar" → rec-postjob.html. No apply link for recruiters.
+    const matchesHref   = `cand-matches.html?job=${encodeURIComponent(job.job_id)}`;
+    const postJobHref   = `rec-postjob.html`;
+
+    return `
     <div class="job-modern-card">
       <div class="job-modern-header">
         <h3>${job.title}</h3>
@@ -549,18 +555,22 @@ function renderRecruiterJobs() {
       <div class="job-modern-company">${job.company || "-"}</div>
       <div class="job-modern-salary">${formatSalary(job)}</div>
       <div class="job-modern-actions">
-        <button class="modern-view-btn" data-url="${job.apply_link || job.apply_url || ""}">View</button>
+        <a class="modern-view-btn"
+           href="${matchesHref}"
+           data-job-id="${job.job_id}">
+          View Matches →
+        </a>
+        <a class="modern-view-btn"
+           href="${postJobHref}"
+           style="background:rgba(192,132,252,.10);border-color:rgba(192,132,252,.25);color:#c084fc;">
+          + Post Similar
+        </a>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 
-  tableEl.querySelectorAll("button[data-url]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const url = btn.getAttribute("data-url");
-      if (!url) { showToast("No application link available for this job.", "warning"); return; }
-      window.open(url, "_blank", "noopener,noreferrer");
-    });
-  });
+  // No more click handler opening external URLs —
+  // the <a href> redirect handles everything now.
 }
 
 function populateLocationFilter() {
@@ -773,6 +783,10 @@ async function renderCandidateMatches(llmMap) {
 async function initRecruiterActionsPage() {
   const container = document.getElementById("actionsContainer");
   if (!container) return;
+  // The new rec-actions module sets data-managed="true" on the container
+  // as its very first act, so we can detect it and bail immediately,
+  // preventing the old _renderContactedList from painting stale cards.
+  if (container.dataset.managed === "true") return;
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) { container.innerHTML = "Not authenticated."; return; }
