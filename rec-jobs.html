@@ -21,6 +21,46 @@ a.modern-view-btn:hover {
   background: rgba(122,162,255,.22);
   border-color: rgba(122,162,255,.5);
 }
+
+/* ── Location tabs ── */
+.location-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 24px;
+}
+.loc-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 6px 14px; border-radius: 20px; cursor: pointer;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  color: #8a9cc8;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.loc-tab:hover {
+  background: rgba(122,162,255,.10);
+  border-color: rgba(122,162,255,.3);
+  color: #c5d3ff;
+}
+.loc-tab.active {
+  background: rgba(122,162,255,.18);
+  border-color: rgba(122,162,255,.45);
+  color: #7aa2ff;
+}
+.loc-tab .loc-count {
+  font-size: 10px; font-weight: 700;
+  background: rgba(122,162,255,.18);
+  color: #7aa2ff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.5;
+}
+.loc-tab.active .loc-count {
+  background: rgba(122,162,255,.3);
+}
 </style>
 </head>
 <body>
@@ -64,6 +104,9 @@ a.modern-view-btn:hover {
 
     <input type="text" id="searchInput" class="modern-search input" placeholder="Search job title…" />
   </div>
+
+  <!-- LOCATION TABS -->
+  <div id="locationTabsRow" class="location-tabs-row"></div>
 
   <!-- JOBS GRID -->
   <div class="jobs-grid-wrapper">

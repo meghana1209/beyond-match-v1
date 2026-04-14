@@ -501,6 +501,19 @@ function getJobLocation(job) {
   );
 }
 
+// Returns a clean pill label: country (+ REMOTE if applicable)
+// "Berlin, Berlin, Germany, REMOTE" → "Germany, REMOTE"
+// "Hamburg, REMOTE"                  → "Germany, REMOTE"
+// "Davidson County, TN"              → "United States"
+function formatLocationPill(loc) {
+  if (!loc) return "-";
+  const isRemote = /\bREMOTE\b/i.test(loc);
+  const country  = getRegionLabel(loc); // getRegionLabel strips REMOTE internally
+  const label    = (country && country.toUpperCase() !== "REMOTE") ? country : null;
+  if (isRemote) return label ? `${label}, REMOTE` : "REMOTE";
+  return label || loc.split(",")[0].trim() || loc;
+}
+
 function formatSalary(job) {
   const min = job.salary_min;
   const max = job.salary_max;
@@ -524,9 +537,14 @@ function renderRecruiterJobs() {
     filtered = filtered.filter(j => j.title?.toLowerCase().includes(searchTerm));
   }
 
-  const location = document.getElementById("locationFilter")?.value?.toLowerCase().trim();
-  if (location) {
-    filtered = filtered.filter(j => (getJobLocation(j) || "").toLowerCase().trim().includes(location));
+  // Tab-based region filter takes precedence over the hidden <select>
+  if (activeLocationTab) {
+    filtered = filtered.filter(j => getRegionLabel(getJobLocation(j)) === activeLocationTab);
+  } else {
+    const location = document.getElementById("locationFilter")?.value?.toLowerCase().trim();
+    if (location) {
+      filtered = filtered.filter(j => (getJobLocation(j) || "").toLowerCase().trim().includes(location));
+    }
   }
 
   const sortValue = document.getElementById("sortSelect")?.value;
@@ -550,7 +568,7 @@ function renderRecruiterJobs() {
     <div class="job-modern-card">
       <div class="job-modern-header">
         <h3>${job.title}</h3>
-        <span class="job-pill">${getJobLocation(job) || "-"}</span>
+        <span class="job-pill">${formatLocationPill(getJobLocation(job))}</span>
       </div>
       <div class="job-modern-company">${job.company || "-"}</div>
       <div class="job-modern-salary">${formatSalary(job)}</div>
@@ -573,17 +591,270 @@ function renderRecruiterJobs() {
   // the <a href> redirect handles everything now.
 }
 
+// Known country names — extend as needed
+const KNOWN_COUNTRIES = new Set([
+  "Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia",
+  "Austria","Azerbaijan","Bahrain","Bangladesh","Belarus","Belgium","Belize","Benin",
+  "Bolivia","Bosnia","Botswana","Brazil","Brunei","Bulgaria","Cambodia","Cameroon","Canada",
+  "Chile","China","Colombia","Croatia","Cuba","Cyprus","Czechia","Czech Republic","Denmark",
+  "Ecuador","Egypt","Estonia","Ethiopia","Finland","France","Georgia","Germany","Ghana",
+  "Greece","Guatemala","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq",
+  "Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kuwait",
+  "Latvia","Lebanon","Libya","Lithuania","Luxembourg","Malaysia","Mali","Malta","Mexico",
+  "Moldova","Mongolia","Morocco","Mozambique","Myanmar","Nepal","Netherlands","New Zealand",
+  "Nicaragua","Nigeria","Norway","Oman","Pakistan","Panama","Paraguay","Peru","Philippines",
+  "Poland","Portugal","Qatar","Romania","Russia","Saudi Arabia","Senegal","Serbia",
+  "Singapore","Slovakia","Slovenia","Somalia","South Africa","South Korea","Spain",
+  "Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tanzania","Thailand",
+  "Tunisia","Turkey","Uganda","Ukraine","United Arab Emirates","UAE","United Kingdom",
+  "UK","United States","USA","US","Uruguay","Uzbekistan","Venezuela","Vietnam","Yemen",
+  "Zambia","Zimbabwe",
+  // short / common aliases
+  "NL","DE","FR","ES","AU","CA","IT","GB","BR","MX","IN","JP","CN","KR","SG","HK",
+  "ZA","AR","CL","CO","PL","SE","NO","DK","FI","BE","AT","CH","PT","GR","RO","HU",
+  "CZ","SK","HR","BG","RS","SI","LT","LV","EE","TH","VN","PH","MY","ID","PK","BD",
+  "EG","SA","AE","IL","IR","IQ","TR","NG","KE","GH","ET","TZ","UG","MA","DZ","TN",
+]);
+
+// Canonical display names for short codes / aliases
+const COUNTRY_DISPLAY = {
+  "US": "United States", "USA": "United States",
+  "UK": "United Kingdom", "GB": "United Kingdom",
+  "UAE": "United Arab Emirates", "AE": "United Arab Emirates",
+  "DE": "Germany", "FR": "France", "ES": "Spain", "IT": "Italy",
+  "NL": "Netherlands", "BE": "Belgium", "AT": "Austria", "CH": "Switzerland",
+  "SE": "Sweden", "NO": "Norway", "DK": "Denmark", "FI": "Finland",
+  "PL": "Poland", "PT": "Portugal", "GR": "Greece", "RO": "Romania",
+  "HU": "Hungary", "CZ": "Czechia", "SK": "Slovakia", "HR": "Croatia",
+  "BG": "Bulgaria", "RS": "Serbia", "SI": "Slovenia",
+  "LT": "Lithuania", "LV": "Latvia", "EE": "Estonia",
+  "CA": "Canada", "AU": "Australia", "NZ": "New Zealand",
+  "BR": "Brazil", "MX": "Mexico", "AR": "Argentina", "CL": "Chile",
+  "CO": "Colombia", "IN": "India", "CN": "China", "JP": "Japan",
+  "KR": "South Korea", "SG": "Singapore", "MY": "Malaysia",
+  "TH": "Thailand", "VN": "Vietnam", "PH": "Philippines",
+  "ID": "Indonesia", "PK": "Pakistan", "BD": "Bangladesh",
+  "HK": "Hong Kong", "TW": "Taiwan", "IL": "Israel", "TR": "Turkey",
+  "SA": "Saudi Arabia", "IR": "Iran", "IQ": "Iraq",
+  "NG": "Nigeria", "KE": "Kenya", "GH": "Ghana", "ZA": "South Africa",
+  "EG": "Egypt", "MA": "Morocco", "DZ": "Algeria", "TN": "Tunisia",
+};
+
+// US state abbreviations — roll them up into "United States"
+const US_STATES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
+  "KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY",
+  "NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV",
+  "WI","WY","DC",
+]);
+
+// Well-known cities → their country (covers common cases that appear in job data)
+const CITY_TO_COUNTRY = {
+  // Germany
+  "berlin":"Germany","hamburg":"Germany","munich":"Germany","münchen":"Germany",
+  "frankfurt":"Germany","cologne":"Germany","köln":"Germany","stuttgart":"Germany",
+  "düsseldorf":"Germany","dortmund":"Germany","essen":"Germany","leipzig":"Germany",
+  "nuremberg":"Germany","nürnberg":"Germany","bremen":"Germany","hannover":"Germany",
+  "augsburg":"Germany","wiesbaden":"Germany","bonn":"Germany","karlsruhe":"Germany",
+  "mannheim":"Germany","hesse":"Germany","bavaria":"Germany","saxony":"Germany",
+  // UK
+  "london":"United Kingdom","manchester":"United Kingdom","birmingham":"United Kingdom",
+  "leeds":"United Kingdom","glasgow":"United Kingdom","liverpool":"United Kingdom",
+  "bristol":"United Kingdom","edinburgh":"United Kingdom","cardiff":"United Kingdom",
+  "belfast":"United Kingdom","sheffield":"United Kingdom","bradford":"United Kingdom",
+  "guisborough":"United Kingdom","buckinghamshire":"United Kingdom",
+  "cheshire":"United Kingdom","somerset":"United Kingdom","newport pagnell":"United Kingdom",
+  "south west england":"United Kingdom","county tyrone":"United Kingdom",
+  "england":"United Kingdom","scotland":"United Kingdom","wales":"United Kingdom",
+  // France
+  "paris":"France","marseille":"France","lyon":"France","toulouse":"France",
+  "nice":"France","nantes":"France","strasbourg":"France","bordeaux":"France",
+  // Spain
+  "madrid":"Spain","barcelona":"Spain","valencia":"Spain","seville":"Spain","bilbao":"Spain",
+  // Netherlands
+  "amsterdam":"Netherlands","rotterdam":"Netherlands","the hague":"Netherlands",
+  "utrecht":"Netherlands","eindhoven":"Netherlands",
+  // India
+  "bangalore":"India","bengaluru":"India","mumbai":"India","delhi":"India",
+  "hyderabad":"India","chennai":"India","pune":"India","kolkata":"India",
+  "ahmedabad":"India","jaipur":"India","surat":"India","noida":"India",
+  "gurgaon":"India","gurugram":"India","telangana":"India","ghaziabad":"India",
+  "tamil nadu":"India","karnataka":"India","maharashtra":"India",
+  // US — common cities/counties that appear without state code
+  "new york":"United States","los angeles":"United States","chicago":"United States",
+  "houston":"United States","phoenix":"United States","philadelphia":"United States",
+  "san antonio":"United States","san diego":"United States","dallas":"United States",
+  "san jose":"United States","austin":"United States","jacksonville":"United States",
+  "san francisco":"United States","columbus":"United States","seattle":"United States",
+  "denver":"United States","nashville":"United States","oklahoma city":"United States",
+  "davidson county":"United States","fulton county":"United States",
+  "clark county":"United States","saint louis county":"United States",
+  "orange county":"United States","san diego county":"United States",
+  "oakland county":"United States","newport pagnell":"United Kingdom",
+  // Brazil
+  "são paulo":"Brazil","sao paulo":"Brazil","rio de janeiro":"Brazil","brasília":"Brazil",
+  // Australia
+  "sydney":"Australia","melbourne":"Australia","brisbane":"Australia",
+  "perth":"Australia","adelaide":"Australia","canberra":"Australia",
+  // Canada
+  "toronto":"Canada","vancouver":"Canada","montreal":"Canada","montréal":"Canada",
+  "calgary":"Canada","ottawa":"Canada","edmonton":"Canada",
+  // Mexico
+  "mexico city":"Mexico","guadalajara":"Mexico","monterrey":"Mexico",
+};
+
+// Derives a country-level label from a full location string.
+// "Berlin, Berlin, Germany, REMOTE" → "Germany"
+// "Davidson County, TN"             → "United States"
+// "Hamburg, REMOTE"                 → "Germany"
+// "REMOTE"                          → "REMOTE"
+// "Bangalore, India"                → "India"
+function getRegionLabel(loc) {
+  if (!loc) return null;
+  // Strip REMOTE for country detection, remember it
+  const cleanLoc = loc.replace(/,?\s*REMOTE\b/gi, "").trim();
+  const parts = cleanLoc.split(",").map(p => p.trim()).filter(Boolean);
+
+  // 1. Scan right-to-left for an explicit country name or code
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p     = parts[i];
+    const upper = p.toUpperCase();
+
+    if (COUNTRY_DISPLAY[upper]) return COUNTRY_DISPLAY[upper];
+    if (COUNTRY_DISPLAY[p])     return COUNTRY_DISPLAY[p];
+
+    const pLower = p.toLowerCase();
+    for (const country of KNOWN_COUNTRIES) {
+      if (country.toLowerCase() === pLower) {
+        return COUNTRY_DISPLAY[country] || country;
+      }
+    }
+
+    // US state abbreviation
+    if (US_STATES.has(upper)) return "United States";
+
+    // Strip "County" suffix and check again as a city
+    const noCounty = pLower.replace(/\s+county$/i, "").trim();
+    if (CITY_TO_COUNTRY[noCounty]) return CITY_TO_COUNTRY[noCounty];
+  }
+
+  // 2. Scan left-to-right for a city we recognise
+  for (let i = 0; i < parts.length; i++) {
+    const key = parts[i].toLowerCase();
+    if (CITY_TO_COUNTRY[key]) return CITY_TO_COUNTRY[key];
+  }
+
+  // 3. Pure REMOTE with no location info
+  if (!cleanLoc || /^remote$/i.test(cleanLoc)) return "REMOTE";
+
+  // 4. Single unrecognised token — show as-is; multi-part → give up & return null
+  //    (null entries are excluded from tabs so junk doesn't appear)
+  if (parts.length === 1) return parts[0];
+  return null;
+}
+
+let activeLocationTab = ""; // "" = All
+
 function populateLocationFilter() {
-  const select = document.getElementById("locationFilter");
-  if (!select) return;
+  const select  = document.getElementById("locationFilter");
+  const tabsRow = document.getElementById("locationTabsRow");
 
   const sourceJobs = showAll ? allJobs : orgJobs;
   const locations  = [...new Set(sourceJobs.map(getJobLocation).filter(Boolean))];
 
-  select.innerHTML = `
-    <option value="">All Locations</option>
-    ${locations.map(loc => `<option value="${loc}">${loc}</option>`).join("")}
-  `;
+  // --- keep the hidden <select> in sync (used by renderRecruiterJobs filter) ---
+  if (select) {
+    select.innerHTML = `
+      <option value="">All Locations</option>
+      ${locations.map(loc => `<option value="${loc}">${loc}</option>`).join("")}
+    `;
+    select.style.display = "none"; // tabs replace the dropdown visually
+  }
+
+  // --- build region tab pills ---
+  if (!tabsRow) return;
+
+  // Group jobs by region label, count per region
+  const regionMap = {}; // regionLabel → Set of full location strings
+  sourceJobs.forEach(j => {
+    const loc    = getJobLocation(j);
+    const region = getRegionLabel(loc);
+    if (!region) return;
+    if (!regionMap[region]) regionMap[region] = new Set();
+    regionMap[region].add(loc);
+  });
+
+  // Count jobs per region
+  const regionCount = {};
+  sourceJobs.forEach(j => {
+    const loc    = getJobLocation(j);
+    const region = getRegionLabel(loc);
+    if (!region) return;
+    regionCount[region] = (regionCount[region] || 0) + 1;
+  });
+
+  const regions = Object.keys(regionMap).sort((a, b) =>
+    (regionCount[b] || 0) - (regionCount[a] || 0)
+  );
+
+  const totalCount = sourceJobs.length;
+
+  // In "All Jobs" mode cap visible tabs to top 10; always show all in "My Org" mode
+  const TAB_LIMIT   = showAll ? 10 : Infinity;
+  const visibleRegs = regions.slice(0, TAB_LIMIT);
+  const hiddenRegs  = regions.slice(TAB_LIMIT);
+
+  function buildTabHTML(r) {
+    const key   = r;
+    const count = regionCount[r] || 0;
+    return `<button class="loc-tab${activeLocationTab === key ? " active" : ""}" data-loc="${key}">
+      ${r}<span class="loc-count">${count}</span>
+    </button>`;
+  }
+
+  const allTabHTML = `<button class="loc-tab${activeLocationTab === "" ? " active" : ""}" data-loc="">
+    All<span class="loc-count">${totalCount}</span>
+  </button>`;
+
+  const hiddenHTML = hiddenRegs.length
+    ? `<span id="extraTabsWrap" style="display:none;display:inline-flex;flex-wrap:wrap;gap:8px;">
+        ${hiddenRegs.map(buildTabHTML).join("")}
+       </span>
+       <button id="showMoreTabsBtn" class="loc-tab" style="border-style:dashed;">
+         + ${hiddenRegs.length} more
+       </button>`
+    : "";
+
+  tabsRow.innerHTML =
+    allTabHTML +
+    visibleRegs.map(buildTabHTML).join("") +
+    hiddenHTML;
+
+  // "Show more / Show less" toggle
+  const showMoreBtn   = tabsRow.querySelector("#showMoreTabsBtn");
+  const extraTabsWrap = tabsRow.querySelector("#extraTabsWrap");
+  let   extraExpanded = false;
+
+  if (showMoreBtn && extraTabsWrap) {
+    extraTabsWrap.style.display = "none"; // start collapsed
+    showMoreBtn.addEventListener("click", () => {
+      extraExpanded = !extraExpanded;
+      extraTabsWrap.style.display = extraExpanded ? "inline-flex" : "none";
+      showMoreBtn.textContent = extraExpanded
+        ? "Show less"
+        : `+ ${hiddenRegs.length} more`;
+    });
+  }
+
+  tabsRow.querySelectorAll(".loc-tab[data-loc]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeLocationTab = btn.dataset.loc;
+      tabsRow.querySelectorAll(".loc-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (select) select.value = "";
+      renderRecruiterJobs();
+    });
+  });
 }
 
 async function initRecruiterJobsPage() {
@@ -606,6 +877,7 @@ async function initRecruiterJobsPage() {
 
   document.getElementById("myOrgBtn")?.addEventListener("click", () => {
     showAll = false;
+    activeLocationTab = "";
     document.getElementById("myOrgBtn").classList.add("active");
     document.getElementById("allJobsBtn").classList.remove("active");
     populateLocationFilter();
@@ -614,6 +886,7 @@ async function initRecruiterJobsPage() {
 
   document.getElementById("allJobsBtn")?.addEventListener("click", () => {
     showAll = true;
+    activeLocationTab = "";
     document.getElementById("allJobsBtn").classList.add("active");
     document.getElementById("myOrgBtn").classList.remove("active");
     populateLocationFilter();
