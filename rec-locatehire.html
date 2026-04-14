@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CandidateMap – BeyondMatch</title>
+  <link rel="stylesheet" href="recruiter-matches.css" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="libs/MarkerCluster.css" />
+  <link rel="stylesheet" href="libs/MarkerCluster.Default.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="libs/leaflet.markercluster.js"></script>
+
+<style>
+/* ── PAGE SHELL ── */
+.page-shell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── TITLE BAR ── */
+.page-title-bar {
+  padding: 24px 28px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(122,162,255,0.06);
+}
+
+.page-title-bar h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-1);
+}
+
+.page-title-bar h1 svg { flex-shrink: 0; }
+
+.page-title-bar p {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+/* ── LEGEND ── */
+.map-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-dot.green {
+  background: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74,222,128,0.2);
+}
+
+.legend-dot.blue {
+  background: #7aa2ff;
+  box-shadow: 0 0 0 2px rgba(122,162,255,0.2);
+}
+
+/* ── MAP + PANEL ROW ── */
+.map-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+/* ── MAP ── */
+#map {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Leaflet dark tile tint */
+.leaflet-tile { filter: brightness(0.85) saturate(0.7); }
+.leaflet-container { background: #0d1018; }
+
+/* ── CITY PANEL ── */
+.city-panel {
+  width: 360px;
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.city-panel.hidden { display: none; }
+
+/* ── PANEL HEADER ── */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(122,162,255,0.07);
+  flex-shrink: 0;
+}
+
+.panel-title-wrap { display: flex; flex-direction: column; gap: 2px; }
+
+.panel-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.panel-job-count {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.panel-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(122,162,255,0.06);
+  border: 1px solid rgba(122,162,255,0.1);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.panel-close:hover {
+  background: rgba(248,113,113,0.1);
+  border-color: rgba(248,113,113,0.25);
+  color: var(--red);
+}
+
+/* ── PANEL BODY ── */
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: rgba(122,162,255,0.15); border-radius: 4px; }
+
+/* ── PLACEHOLDER ── */
+.panel-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px;
+  gap: 14px;
+}
+
+.placeholder-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--blue-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-icon svg { stroke: var(--blue); }
+
+.panel-placeholder h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.panel-placeholder p {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+/* ── CANDIDATE CARDS IN PANEL ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.panel-job-card {
+  background: #0d1018;
+  border: 1px solid rgba(122,162,255,0.07);
+  border-radius: 11px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s, transform 0.2s;
+  animation: fadeUp 0.25s ease both;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-job-card:last-child { margin-bottom: 0; }
+
+.panel-job-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(122,162,255,0.03), transparent 70%);
+  pointer-events: none;
+}
+
+.panel-job-card:hover {
+  border-color: rgba(122,162,255,0.2);
+  transform: translateY(-2px);
+}
+
+.panel-job-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.panel-job-company {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.panel-job-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.panel-job-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+
+.panel-job-source {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-left: auto;
+}
+
+.panel-apply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, rgba(122,162,255,0.18), rgba(122,162,255,0.08));
+  border: 1px solid rgba(122,162,255,0.28);
+  border-radius: var(--radius-sm);
+  color: var(--blue);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.panel-apply-btn:hover {
+  background: var(--blue);
+  color: #080c18;
+  border-color: var(--blue);
+}
+
+/* ── CLUSTER MARKERS ── */
+.cluster-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7aa2ff, #4f46e5);
+  border: 2px solid rgba(122,162,255,0.4);
+  box-shadow: 0 0 0 4px rgba(122,162,255,0.12), 0 4px 12px rgba(79,70,229,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.cluster-icon.matched {
+  background: linear-gradient(135deg, #4ade80, #16a34a);
+  border-color: rgba(74,222,128,0.5);
+  box-shadow: 0 0 0 4px rgba(74,222,128,0.15), 0 4px 12px rgba(22,163,74,0.5);
+}
+
+/* ── MATCHED CANDIDATE CARDS ── */
+.panel-job-matched {
+  border-color: rgba(74,222,128,0.25) !important;
+  background: linear-gradient(135deg, rgba(74,222,128,0.04), transparent) !important;
+}
+.panel-job-matched:hover {
+  border-color: rgba(74,222,128,0.45) !important;
+}
+
+.panel-match-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4ade80;
+  background: rgba(74,222,128,0.1);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 5px;
+  padding: 2px 8px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── SECTION DIVIDERS ── */
+.panel-section-divider {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7fa8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 2px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(122,162,255,0.07);
+}
+
+.panel-section-divider.panel-section-matched {
+  color: #4ade80;
+  border-top-color: rgba(74,222,128,0.15);
+}
+
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  font-family: 'DM Sans', sans-serif;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ════════ SIDEBAR ════════ -->
+<aside class="sidebar">
+  <a href="/rec-dash.html" style="text-decoration:none;"><h2 class="brand">BeyondMatch</h2></a>
+  <nav class="menu">
+    <a href="rec-dash.html"          class="menu-item">Dashboard</a>
+    <a href="rec-postjob.html"       class="menu-item">Post Job</a>
+    <a href="rec-jobs.html"          class="menu-item">My Jobs</a>
+    <a href="cand-matches.html"      class="menu-item">Candidate Matches</a>
+    <a href="rec-locatehire.html"    class="menu-item active">CandidateMap</a>
+    <a href="rec-actions.html"       class="menu-item">Recruiter Actions</a>
+    <a href="settings.html"          class="menu-item">Settings</a>
+    <button class="menu-item logout-btn" onclick="unifiedLogout()">⏻ Logout</button>
+  </nav>
+</aside>
+
+<!-- ════════ PAGE SHELL ════════ -->
+<div class="page-shell">
+
+  <!-- TITLE BAR -->
+  <div class="page-title-bar">
+    <h1>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#7aa2ff" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+      </svg>
+      CandidateMap
+    </h1>
+    <p>Explore your candidate pool geographically. Green markers match your organisation's open roles.</p>
+    <div class="map-legend">
+      <div class="legend-item">
+        <div class="legend-dot green"></div>
+        <span>Matches your org's jobs</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot blue"></div>
+        <span>Other candidates</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP + PANEL -->
+  <div class="map-row">
+
+    <div id="map"></div>
+
+    <div id="cityPanel" class="city-panel hidden">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h3 id="panelTitle">Candidates</h3>
+          <div class="panel-job-count" id="panelCount"></div>
+        </div>
+        <button class="panel-close" onclick="closeCityPanel()" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="panel-body" id="panelGrid">
+        <div class="panel-placeholder">
+          <div class="placeholder-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h4>Select a location</h4>
+          <p>Click any marker on the map to explore candidates in that area.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SCRIPTS -->
+<script type="module" src="auth.js"></script>
+<script type="module" src="api.js"></script>
+<script type="module" src="rec-locatehire.js"></script>
+
+</body>
+</html>

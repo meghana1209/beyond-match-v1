@@ -1437,4 +1437,4 @@ function renderCandidateAnalysis(content, candidateName, data, jobData = {}) {
       <div style="color:${recColor};font-size:14px;font-weight:600;">${data.hire_recommendation || "—"}</div>
     </div>
   `;
-}
+};
