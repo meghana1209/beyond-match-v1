@@ -765,7 +765,7 @@ function subscribeNotifications(userUid) {
                 ? `<div style="margin-top:5px;font-size:12px;color:#6b7fa8;font-style:italic;">"${escHtml(n.message)}"</div>` : ''}
             </div>
             ${n.apply_url ? `
-            <a href="${escHtml(n.apply_url)}"
+            <a href="${escAttr(n.apply_url)}"
                onclick="event.stopPropagation();markNotifRead('${n.id}')"
                style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;
                       font-size:12px;font-weight:600;color:#4ade80;text-decoration:none;
@@ -811,15 +811,21 @@ window.toggleNotifPanel = function() {
 
 /* ─── Apply-from-Link: read URL params and open modal ─── */
 (function checkApplyParam() {
-  const params   = new URLSearchParams(window.location.search);
-  const applyJob = params.get('apply');
-  const title    = params.get('title')    || 'this job';
-  const recruiter= params.get('recruiter')|| '';
+  const params      = new URLSearchParams(window.location.search);
+  const applyJob    = params.get('apply');
+  const title       = params.get('title')       || 'this job';
+  const recruiter   = params.get('recruiter')   || '';
+  const firestoreId = params.get('firestore_id')|| '';
 
   if (!applyJob) return;
 
   // Store for use when modal submits
-  window._pendingApply = { jobId: applyJob, jobTitle: decodeURIComponent(title), recruiterId: recruiter };
+  window._pendingApply = {
+    jobId:       applyJob,
+    jobTitle:    decodeURIComponent(title),
+    recruiterId: recruiter,
+    firestoreId: firestoreId || applyJob   // fall back to jobId if not provided
+  };
 
   // Populate and open modal — wait for DOM to be ready
   function openModal() {
@@ -886,7 +892,7 @@ window.submitApplyModal = async function() {
     pending.jobId,
     pending.jobTitle,
     pending.recruiterId,
-    pending.jobId,   // jobFirestoreId same as jobId for BeyondMatch jobs
+    pending.firestoreId || pending.jobId,   // jobFirestoreId
     note
   );
 

@@ -86,6 +86,18 @@ function waitForAuth() {
    @param {string} [jobFirestoreId] — Firestore doc id if different from jobId
    ───────────────────────────────────────────────── */
 window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId, candidateNote) {
+  // FIX: Reject undefined/null jobId immediately.
+  // If jobId is undefined, the Firestore where("job_id", "==", undefined) call
+  // throws: "FirebaseError: Unsupported field value: undefined".
+  // This happens when _applyClick() in candidate.js fails to resolve the id
+  // from the button's data attributes (e.g. wrong dataset key, wrong button
+  // variant rendered). Fail fast here with a clear message instead.
+  if (!jobId) {
+    console.error("applyToJob called with missing jobId. Check data-apply-job attribute on the Apply button.");
+    safeToast("Could not identify the job. Please refresh and try again.", "error");
+    return false;
+  }
+
   // FIX: Wait for Firebase auth to resolve before checking currentUser.
   // The original synchronous auth.currentUser check always returned null on
   // first page load, causing every apply attempt to silently fail.

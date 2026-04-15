@@ -563,23 +563,26 @@ async function loadCandidateJobMatches() {
         ${aiInsight ? `<div class="match-insight">✦ ${aiInsight}</div>` : ""}
 
         <div class="match-actions">
-          ${cardData.source === "beyondmatch"
-            // FIX: Use data-* attributes instead of inline JSON/function args.
-            // Pass firestore_id as data-firestore-id so job_firestore_id is
-            // stored correctly in Firestore. _applyClick() reads all params
-            // from the element — no quoting or escaping issues.
+          ${(cardData.source === "beyondmatch" || (!cardData.source && !!cardData.recruiter_id))
+            // FIX: Also treat jobs with a recruiter_id but no source as internal.
+            // If the backend omits the source field entirely, the original strict
+            // equality check failed and the external-link button was rendered —
+            // that button has no data-apply-job attribute, so _applyClick()
+            // couldn't resolve jobId and logged "APPLY CLICKED undefined".
             ? `<button class="match-btn apply"
-                 data-apply-job="${cardData.job_id}"
-                 data-job-title="${cardData.title.replace(/"/g, '&quot;')}"
-                 data-recruiter-id="${cardData.recruiter_id}"
-                 data-firestore-id="${cardData.firestore_id}"
-                 data-candidate-id="${candidateId}"
-                 onclick="window._applyClick(this)">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-                Apply
-              </button>`
+  data-apply-job="${cardData.job_id || cardData.id}"
+  data-job-title="${cardData.title.replace(/"/g, '&quot;')}"
+  data-recruiter-id="${cardData.recruiter_id || ''}"
+  data-firestore-id="${cardData.firestore_id || cardData.job_id || cardData.id}"
+  data-candidate-id="${candidateId}"
+  onclick="window._applyClick(this)">
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+    <polyline points="15 3 21 3 21 9"/>
+    <line x1="10" y1="14" x2="21" y2="3"/>
+  </svg>
+  Apply
+</button>`
             : `<button class="match-btn apply"
                  data-apply-url="${(cardData.apply_url || '#').replace(/"/g, '&quot;')}"
                  onclick="openApplyLink(this.dataset.applyUrl)">
@@ -816,25 +819,69 @@ window.handleApplyBeyondMatch = handleApplyBeyondMatch;
    broke whenever job titles or descriptions contained quotes — the
    HTML attribute terminated early and the JS parser threw a SyntaxError.
    ───────────────────────────────────────────────── */
-window._applyClick = function (btn) {
-  const jobId       = btn.dataset.applyJob;
-  const jobTitle    = btn.dataset.jobTitle;
-  const recruiterId = btn.dataset.recruiterId;
+window._applyClick = async function (btn) {
+  // FIX: dataset.jobId maps to data-job-id (hyphenated), but the card uses
+  // data-jobid (no hyphen) which maps to dataset.jobid (all lowercase).
+  // The original `dataset.jobId` fallback always returned undefined.
+  const jobId =
+    btn.dataset.applyJob ||
+    btn.getAttribute("data-apply-job") ||
+    btn.closest(".match-card")?.dataset.jobid;   // ← lowercase 'jobid'
+
+  const jobTitle =
+    btn.dataset.jobTitle ||
+    btn.closest(".match-card")?.querySelector(".match-card-title")?.textContent?.trim() ||
+    "Job";
+
+  const recruiterId =
+    btn.dataset.recruiterId ||
+    btn.closest(".match-card")?.dataset.recruiterId ||
+    "";
+
   const firestoreId = btn.dataset.firestoreId;
-  const candidateId = btn.dataset.candidateId;
 
-  // Redirect to cand_actions.html with job context as query params.
-  // The apply form there collects an optional note and then calls applyToJob().
-  const params = new URLSearchParams({
-    job_id:       jobId       || "",
-    title:        jobTitle    || "",
-    rec:          recruiterId || "",
-    firestore_id: firestoreId || "",
-    candidate_id: candidateId || ""
-  });
-  window.location.href = `cand_actions.html?${params.toString()}`;
+  console.log("APPLY CLICKED", jobId);
+
+  // FIX: Guard — if jobId is still undefined here don't proceed.
+  // Passing undefined to Firestore where() throws:
+  // "Unsupported field value: undefined"
+  if (!jobId) {
+    console.error("_applyClick: could not resolve jobId from button", btn);
+    if (typeof window.showToast === "function") {
+      window.showToast("Could not identify the job. Please refresh and try again.", "error");
+    }
+    return;
+  }
+
+  if (typeof window.applyToJob !== "function") {
+    console.error("applyToJob not loaded");
+    return;
+  }
+
+  // Open the inline apply modal (defined in jobmatches.html) so the
+  // candidate can add a cover note before submitting.
+  if (typeof window.openApplyModal === "function") {
+    window.openApplyModal(jobId, jobTitle, recruiterId, firestoreId);
+    return;
+  }
+
+  // Fallback: direct apply without modal (e.g. on candidate-dashboard.html)
+  btn.disabled  = true;
+  btn.innerText = "Applying...";
+
+  const success = await window.applyToJob(jobId, jobTitle, recruiterId, firestoreId);
+
+  if (success) {
+    btn.innerText         = "Applied ✓";
+    btn.style.opacity     = "0.6";
+    btn.style.cursor      = "default";
+  } else {
+    btn.disabled  = false;
+    btn.innerText = "Apply";
+  }
+
+  return false;
 };
-
 
 /* =========================================================
    SAVE BUTTON HANDLER

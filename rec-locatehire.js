@@ -85,6 +85,8 @@ function resolveCountryLabel(candidates) {
    one org job. Blue = unmatched.
 ========================================================= */
 let _matchedCandidateIds = new Set();
+// Maps candidate_id → { match_percent, job_id, job_title, company }[]
+let _candidateMatchMap   = {};
 let _recruiterOrg        = null;
 let _orgJobs             = [];
 
@@ -93,7 +95,23 @@ async function loadMatchedCandidateIds() {
     // Fast path: already stored this session
     const cached = sessionStorage.getItem("bm_rec_matched_cand_ids");
     if (cached) {
-      try { _matchedCandidateIds = new Set(JSON.parse(cached)); return; } catch { }
+      try {
+        _matchedCandidateIds = new Set(JSON.parse(cached));
+        const cachedMap = sessionStorage.getItem("bm_rec_candidate_match_map");
+        if (cachedMap) _candidateMatchMap = JSON.parse(cachedMap);
+        // Validate cache has real pct data — if all are 0/null, bust the cache
+        const vals = Object.values(_candidateMatchMap).flat();
+        const hasRealData = vals.some(v => v.match_percent != null && v.match_percent > 0);
+        // Also bust if company field is missing (older broken cache)
+        const hasCompany = vals.some(v => v.company && v.company !== "");
+        if (vals.length === 0 || (hasRealData && hasCompany)) return; // cache is good
+        // else fall through to re-fetch
+        console.log("[LocateHire] Cache invalid (missing pct or company) — busting and re-fetching");
+        sessionStorage.removeItem("bm_rec_matched_cand_ids");
+        sessionStorage.removeItem("bm_rec_candidate_match_map");
+        _candidateMatchMap = {};
+        _matchedCandidateIds = new Set();
+      } catch { }
     }
 
     // Wait for apiFetch from api.js
@@ -146,15 +164,51 @@ async function loadMatchedCandidateIds() {
         try {
           const res = await window.apiFetch(`/matches?job_id=${j.job_id}&top_n=50&offset=0`);
           const matches = res?.matches || (Array.isArray(res) ? res : []);
-          return matches.map(m => String(m.candidate_id));
+          // Debug: log first match object to confirm field names
+          if (matches[0]) console.log(`[LocateHire] /matches sample for job ${j.job_id}:`, JSON.stringify(matches[0]));
+          // match_percent may also come as score (0–1) or match_score — normalise all
+          return matches.map(m => {
+            let pct = m.match_percent ?? m.match_score ?? null;
+            if (pct == null && m.score != null) pct = m.score * 100; // 0-1 → 0-100
+            pct = pct != null ? Math.round(pct) : null; // null = unknown, not 0
+            return {
+              candidate_id: String(m.candidate_id),
+              match_percent: pct,
+              job_id:    j.job_id,
+              job_title: j.title || j.role || "Open Role",
+              company:   j.company || _recruiterOrg || ""
+            };
+          });
         } catch { return []; }
       })
     );
 
-    _matchedCandidateIds = new Set(allMatchArrays.flat());
+    // Build per-candidate map: keep best match per job, sorted desc by %
+    _candidateMatchMap = {};
+    for (const arr of allMatchArrays) {
+      for (const m of arr) {
+        // Store under BOTH the raw string and numeric string so Firestore doc-ID
+        // lookups (which are strings like "42" or full UUIDs) always find a hit.
+        const keys = new Set([String(m.candidate_id)]);
+        const asNum = String(Number(m.candidate_id));
+        if (asNum !== "NaN") keys.add(asNum);
+        for (const key of keys) {
+          if (!_candidateMatchMap[key]) _candidateMatchMap[key] = [];
+          _candidateMatchMap[key].push(m);
+        }
+      }
+    }
+    // Sort each candidate's matches desc
+    for (const id of Object.keys(_candidateMatchMap)) {
+      _candidateMatchMap[id].sort((a, b) => b.match_percent - a.match_percent);
+    }
+
+    // Build the matched ID set from the map keys (already normalised above)
+    _matchedCandidateIds = new Set(Object.keys(_candidateMatchMap));
 
     try {
       sessionStorage.setItem("bm_rec_matched_cand_ids", JSON.stringify([..._matchedCandidateIds]));
+      sessionStorage.setItem("bm_rec_candidate_match_map", JSON.stringify(_candidateMatchMap));
     } catch { }
 
   } catch (e) {
@@ -359,6 +413,44 @@ function _makeMarker(loc) {
 
 
 /* =========================================================
+   AUTO-ZOOM: if all markers fall within a single country,
+   fit the map to those bounds automatically.
+========================================================= */
+function _autoZoomIfSingleCountry() {
+  if (!markersLayer) return;
+
+  const allMarkers = [];
+  markersLayer.eachLayer(m => { if (m._bmCandidates) allMarkers.push(m); });
+
+  if (!allMarkers.length) return;
+
+  // Extract country from each marker's first candidate location
+  function _extractCountry(marker) {
+    const loc = marker._bmCandidates[0]?.location_display
+              || marker._bmCandidates[0]?.location
+              || marker._bmCandidates[0]?.city
+              || "";
+    const parts = loc.split(",").map(s => s.trim());
+    return parts[parts.length - 1] || "";
+  }
+
+  const countries = new Set(allMarkers.map(_extractCountry).filter(Boolean));
+
+  if (countries.size !== 1) return; // multiple or no country — skip
+
+  // Fit map to marker bounds with padding
+  const bounds = L.latLngBounds(allMarkers.map(m => m.getLatLng()));
+  map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: true });
+
+  // After zoom, open the panel for that location automatically
+  setTimeout(() => {
+    const first = allMarkers[0];
+    if (first) showCandidatesForLocation(first._bmTitle || [...countries][0], allMarkers.flatMap(m => m._bmCandidates));
+  }, 600);
+}
+
+
+/* =========================================================
    LOAD CANDIDATES AND PLACE MARKERS
    Candidates with lat/lng placed immediately.
    Others geocoded via Nominatim (Photon fallback) with
@@ -377,8 +469,16 @@ async function loadCandidatesAndMarkers() {
       const snapshot = await getDocs(collection(window.db, "candidates"));
 
       candidates = snapshot.docs
-        .map(doc => doc.data())
+        .map(doc => {
+          const data = doc.data();
+          // Ensure candidate_id is always the Firestore document ID so it
+          // aligns with the IDs returned by /matches from the backend.
+          return { candidate_id: doc.id, ...data };
+        })
         .filter(c => c.is_latest !== false);
+
+      // Debug: log first candidate to confirm field names
+      if (candidates[0]) console.log("[LocateHire] Firestore candidate sample:", JSON.stringify(candidates[0]));
 
       console.log("🔥 Candidates loaded:", candidates.length);
     }
@@ -497,13 +597,20 @@ async function loadCandidatesAndMarkers() {
   // ✅ 8. Apply match highlighting
   await matchPromise;
   _refreshMarkerStyles();
+
+  // ✅ 9. Auto-zoom if all candidates share one country
+  _autoZoomIfSingleCountry();
 }
 
 
 /* =========================================================
    RIGHT PANEL — CANDIDATE LIST FOR A LOCATION
-   Matched candidates (against org jobs) appear at the top
-   with a green badge. Others follow below.
+   Matched candidates (against org jobs) appear at the top,
+   sorted by match_percent descending. Others follow below.
+   Each card clearly separates:
+     • Candidate name + their role (what they are)
+     • Job title + company they matched to (what the org needs)
+     • Match % ring
 ========================================================= */
 function showCandidatesForLocation(title, candidates) {
   const panel   = document.getElementById("cityPanel");
@@ -514,18 +621,42 @@ function showCandidatesForLocation(title, candidates) {
   panel.classList.remove("hidden");
   heading.textContent = title;
 
-  const matched   = candidates.filter(c =>  _matchedCandidateIds.has(String(c.candidate_id)));
-  const unmatched = candidates.filter(c => !_matchedCandidateIds.has(String(c.candidate_id)));
+  // Enrich each candidate with their best match info.
+  // Try both the raw candidate_id and numeric form since the backend /matches
+  // API may return integer IDs while Firestore stores them as strings.
+  const enriched = candidates.map(c => {
+    const idStr  = String(c.candidate_id ?? "");
+    const idNum  = String(Number(idStr));            // "42" → "42", "abc" → "NaN"
+    // Look up match data — try string key first, then numeric, then name fallback
+    const matches =
+      _candidateMatchMap[idStr] ||
+      (_candidateMatchMap[idNum] && idNum !== "NaN" ? _candidateMatchMap[idNum] : null) ||
+      [];
+    const isMatch =
+      _matchedCandidateIds.has(idStr) ||
+      (_matchedCandidateIds.has(idNum) && idNum !== "NaN");
+    const best = matches[0] || null;
+    return { ...c, _isMatch: isMatch, _best: best, _matches: matches };
+  });
+
+  // Sort: matched first sorted by match_percent desc, then unmatched alphabetically
+  const matched   = enriched
+    .filter(c => c._isMatch)
+    .sort((a, b) => (b._best?.match_percent ?? -1) - (a._best?.match_percent ?? -1));
+  const unmatched = enriched
+    .filter(c => !c._isMatch)
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const ordered   = [...matched, ...unmatched];
 
   if (count) {
     count.textContent = `${candidates.length} candidate${candidates.length === 1 ? "" : "s"}${matched.length ? ` · ${matched.length} org match${matched.length === 1 ? "" : "es"}` : ""}`;
   }
 
-  grid.innerHTML = "";
+  // Build HTML in one shot (no innerHTML += in loop)
+  let html = "";
 
   if (!candidates.length) {
-    grid.innerHTML = `
+    html = `
       <div class="panel-placeholder">
         <div class="placeholder-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -535,13 +666,14 @@ function showCandidatesForLocation(title, candidates) {
         <h4>No candidates here</h4>
         <p>No candidates available for this location.</p>
       </div>`;
+    grid.innerHTML = html;
     return;
   }
 
-  // Section headers only when both groups are present
-  if (matched.length > 0 && unmatched.length > 0) {
-    grid.innerHTML += `
-      <div class="panel-section-divider panel-section-matched">
+  // ── Org Matches section header ──────────────────────────────
+  if (matched.length > 0) {
+    html += `
+      <div class="panel-section-divider panel-section-matched" style="margin-top:0;border-top:none;padding-top:0;margin-bottom:8px;">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="#4ade80" style="vertical-align:-1px;margin-right:4px;">
           <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
@@ -550,57 +682,117 @@ function showCandidatesForLocation(title, candidates) {
   }
 
   ordered.forEach((cand, i) => {
-    const isMatch   = _matchedCandidateIds.has(String(cand.candidate_id));
-    const name      = cand.name || "Candidate";
-    const email     = cand.email || "";
-  // 🔥 Find matched job (best possible match)
-let matchedJob = null;
+    const isMatch = cand._isMatch;
+    const best    = cand._best;
 
-if (isMatch && _orgJobs.length) {
-  matchedJob = _orgJobs[0]; // simple mapping (since exact mapping not stored)
-}
+    // ── Section break between matched and unmatched ──────────
+    if (i === matched.length && unmatched.length > 0 && matched.length > 0) {
+      html += `
+        <div class="panel-section-divider" style="margin-top:6px;margin-bottom:8px;">
+          Other Candidates
+        </div>`;
+    }
 
-// ✅ Values
-const companyName = _recruiterOrg || "Your Company";
-const jobRole     = matchedJob?.title || matchedJob?.role || "Matched Role";
+    // ── Candidate identity ───────────────────────────────────
+    const candName = cand.name || "Candidate";
+    // What the candidate IS (their role from Firestore)
+    const candRole = cand.applied_role || cand.role || "—";
+    const location = cand.location_display || cand.location || cand.city || "Location not specified";
 
-const location  = cand.location_display || cand.location || cand.city || "Location not specified";
+    // ── Match job details (what the ORG needs) ───────────────
+    const jobTitle  = best?.job_title || "—";
+    const company   = best?.company   || _recruiterOrg || "—";
+    const pct       = best?.match_percent; // null = unknown
 
-// ✅ Replace badge
-const matchBadge = isMatch ? `
-  <div class="panel-match-badge">
-    ${companyName}
-  </div>` : "";
+    // ── Match % ring ─────────────────────────────────────────
+    let matchRingHTML = "";
+    if (isMatch) {
+      const hasPct      = pct != null;
+      const displayPct  = hasPct ? pct : "?";
+      const ringColor   = !hasPct ? "#6b7fa8" : pct >= 75 ? "#4ade80" : pct >= 50 ? "#fbbf24" : "#7aa2ff";
+      const circumference = 2 * Math.PI * 15;
+      const dash = hasPct ? ((pct / 100) * circumference).toFixed(1) : "0";
+      const gap  = hasPct ? (circumference - +dash).toFixed(1)        : circumference.toFixed(1);
+      matchRingHTML = `
+        <div style="position:relative;width:48px;height:48px;flex-shrink:0;" title="${hasPct ? pct + "% match" : "Match % unavailable"}">
+          <svg width="48" height="48" viewBox="0 0 48 48" style="transform:rotate(-90deg);">
+            <circle cx="24" cy="24" r="15" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3.5"/>
+            <circle cx="24" cy="24" r="15" fill="none" stroke="${ringColor}" stroke-width="3.5"
+              stroke-dasharray="${dash} ${gap}" stroke-linecap="round"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0;">
+            <span style="font-size:${hasPct ? "11" : "10"}px;font-weight:800;color:${ringColor};line-height:1;">${displayPct}${hasPct ? "%" : ""}</span>
+          </div>
+        </div>`;
+    }
 
-    const viewHref = `cand-matches.html`;
+    // ── Extra matched jobs (if candidate matches multiple roles) ─
+    let extraPillsHTML = "";
+    if (isMatch && (cand._matches || []).length > 1) {
+      const pills = cand._matches.slice(1).map(m => {
+        const c = m.match_percent >= 75 ? "#4ade80" : m.match_percent >= 50 ? "#fbbf24" : "#7aa2ff";
+        const pStr = m.match_percent != null ? `${m.match_percent}%` : "?%";
+        return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(122,162,255,0.07);border:1px solid rgba(122,162,255,0.14);color:#8fa8cc;">
+          ${m.job_title}<span style="color:${c};font-weight:700;margin-left:2px;">${pStr}</span>
+        </span>`;
+      }).join("");
+      extraPillsHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;">${pills}</div>`;
+    }
 
-    grid.innerHTML += `
-      <div class="panel-job-card${isMatch ? " panel-job-matched" : ""}" style="animation-delay:${i * 45}ms">
-        ${matchBadge}
-        <div class="panel-job-title">${name}</div>
+    // ── Card ─────────────────────────────────────────────────
+    html += `
+      <div class="panel-job-card${isMatch ? " panel-job-matched" : ""}" style="animation-delay:${i * 40}ms;padding:12px 14px;">
 
-<!-- 🔥 Show job role if matched -->
-<div class="panel-job-company">
-  ${isMatch ? jobRole : (cand.applied_role || cand.role || "Candidate")}
-</div>
-        <div class="panel-job-meta">
-          <span class="panel-job-loc">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
-            ${location}
-          </span>
-          ${email ? `<span class="panel-job-source" style="font-size:10px;color:#6b7fa8;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;">${email}</span>` : ""}
+        ${isMatch ? `
+        <!-- ORG + JOB ROW (what org needs) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+            <span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.22);border-radius:4px;padding:1px 7px;flex-shrink:0;">${company}</span>
+            <span style="font-size:11px;font-weight:600;color:#c8d8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${jobTitle}">↳ ${jobTitle}</span>
+          </div>
+        </div>` : ""}
+
+        <!-- CANDIDATE ROW -->
+        <div style="display:flex;align-items:center;gap:10px;">
+          <!-- Avatar -->
+          <div style="width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;background:${isMatch ? "linear-gradient(135deg,rgba(74,222,128,0.25),rgba(74,222,128,0.1))" : "linear-gradient(135deg,rgba(122,162,255,0.18),rgba(122,162,255,0.06))"};border:1px solid ${isMatch ? "rgba(74,222,128,0.2)" : "rgba(122,162,255,0.12)"};">
+            ${candName.charAt(0).toUpperCase()}
+          </div>
+          <!-- Name + role -->
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:#e2e8f0;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${candName}</div>
+            <div style="font-size:11px;color:#6b7fa8;margin-top:2px;display:flex;align-items:center;gap:4px;">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+              <span>${candRole}</span>
+            </div>
+          </div>
+          ${matchRingHTML}
         </div>
-        <a class="panel-apply-btn" href="${viewHref}" style="${isMatch ? "background:linear-gradient(135deg,rgba(74,222,128,0.18),rgba(74,222,128,0.08));border-color:rgba(74,222,128,0.35);color:#4ade80;" : ""}">
+
+        ${extraPillsHTML}
+
+        <!-- LOCATION -->
+        <div style="display:flex;align-items:center;gap:4px;margin-top:9px;margin-bottom:10px;">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6b7fa8" stroke-width="2" style="flex-shrink:0;">
+            <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span style="font-size:10px;color:#6b7fa8;">${location}</span>
+        </div>
+
+        <!-- CTA -->
+        <button class="panel-apply-btn"
+          onclick="openCandidateProfileModal('${cand.candidate_id}','${candName.replace(/'/g,"\\'")}','${jobTitle.replace(/'/g,"\\'")}','${company.replace(/'/g,"\\'")}',${pct ?? "null"})"
+          style="${isMatch ? "background:linear-gradient(135deg,rgba(74,222,128,0.15),rgba(74,222,128,0.06));border-color:rgba(74,222,128,0.3);color:#4ade80;" : ""}">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
-          View Matches →
-        </a>
+          View Profile →
+        </button>
       </div>`;
   });
+
+  grid.innerHTML = html;
 }
 
 window.closeCityPanel = function () {
@@ -611,8 +803,232 @@ window.closeCityPanel = function () {
 
 
 /* =========================================================
-   BOOT
+   CANDIDATE PROFILE MODAL
+   Opens an inline modal mirroring rec-actions profile view.
+   Shows Firestore candidate data: name, role, resume snippet,
+   email, location, match details, and links to Deep Analysis.
 ========================================================= */
+(function _injectCandProfileModal() {
+  if (document.getElementById("bmCandProfileOverlay")) return;
+
+  // ── Styles ──
+  const style = document.createElement("style");
+  style.textContent = `
+    #bmCandProfileOverlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.82);
+      backdrop-filter: blur(7px); z-index: 2000;
+      display: none; align-items: center; justify-content: center;
+      padding: 20px; box-sizing: border-box;
+    }
+    #bmCandProfileOverlay.open { display: flex; }
+    #bmCandProfileModal {
+      background: #0f1220; border: 1px solid rgba(122,162,255,.16);
+      border-radius: 16px; width: 100%; max-width: 600px;
+      max-height: 88vh; overflow-y: auto;
+      padding: 30px 28px; box-sizing: border-box;
+      position: relative; color: #e2e8f0; font-family: 'DM Sans', sans-serif;
+      box-shadow: 0 24px 72px rgba(0,0,0,.7);
+    }
+    #bmCandProfileModal::-webkit-scrollbar { width: 4px; }
+    #bmCandProfileModal::-webkit-scrollbar-thumb { background: rgba(122,162,255,.15); border-radius: 4px; }
+    .bm-cpm-close {
+      position: absolute; top: 16px; right: 18px;
+      background: none; border: none; color: #4a5580;
+      font-size: 20px; cursor: pointer; line-height: 1; transition: color .15s;
+    }
+    .bm-cpm-close:hover { color: #e2e8f0; }
+    .bm-cpm-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: #7aa2ff; margin-bottom: 5px; display: block;
+    }
+    .bm-cpm-field { margin-bottom: 14px; }
+    .bm-cpm-field p { font-size: 13.5px; color: #c9d5e8; margin: 0; line-height: 1.5; }
+    .bm-cpm-divider { height: 1px; background: rgba(122,162,255,.09); margin: 18px 0; }
+    .bm-cpm-btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+    .bm-cpm-btn {
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 18px; border-radius: 9px; cursor: pointer;
+      border: 1px solid rgba(122,162,255,.22);
+      background: transparent; color: #7aa2ff; transition: all .18s;
+    }
+    .bm-cpm-btn:hover { background: rgba(122,162,255,.1); }
+    .bm-cpm-btn.primary {
+      background: rgba(122,162,255,.14); border-color: rgba(122,162,255,.4);
+    }
+    .bm-cpm-btn.primary:hover { background: rgba(122,162,255,.22); }
+    .bm-cpm-btn.green {
+      color: #4ade80; border-color: rgba(74,222,128,.25);
+      background: rgba(74,222,128,.08);
+    }
+    .bm-cpm-btn.green:hover { background: rgba(74,222,128,.16); }
+    .bm-cpm-match-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .bm-cpm-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; padding: 3px 10px; border-radius: 20px;
+      background: rgba(122,162,255,.07); border: 1px solid rgba(122,162,255,.14);
+      color: #8fa8cc;
+    }
+    .bm-cpm-pill .pct { font-weight: 700; }
+    @keyframes bmCpmFadeIn { from { opacity:0; transform:translateY(10px) scale(.98); } to { opacity:1; transform:none; } }
+    #bmCandProfileModal { animation: bmCpmFadeIn .22s ease both; }
+  `;
+  document.head.appendChild(style);
+
+  // ── Overlay HTML ──
+  const overlay = document.createElement("div");
+  overlay.id = "bmCandProfileOverlay";
+  overlay.innerHTML = `
+    <div id="bmCandProfileModal">
+      <button class="bm-cpm-close" id="bmCandProfileClose">✕</button>
+      <span class="bm-cpm-label">Candidate Profile</span>
+      <div id="bmCandProfileContent">
+        <div style="display:flex;align-items:center;gap:10px;padding:24px 0;color:#6b7280;font-size:14px;">
+          <div style="width:18px;height:18px;border-radius:50%;border:2px solid #7aa2ff;border-top-color:transparent;animation:recSpin .8s linear infinite;flex-shrink:0;"></div>
+          Loading candidate…
+        </div>
+        <style>@keyframes recSpin{to{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("open"); });
+  document.getElementById("bmCandProfileClose").addEventListener("click", () => overlay.classList.remove("open"));
+})();
+
+window.openCandidateProfileModal = async function(candidateId, nameHint, jobTitleHint, companyHint, matchPct) {
+  const overlay = document.getElementById("bmCandProfileOverlay");
+  const content = document.getElementById("bmCandProfileContent");
+  if (!overlay || !content) return;
+
+  // Reset + open
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:24px 0;color:#6b7280;font-size:14px;">
+      <div style="width:18px;height:18px;border-radius:50%;border:2px solid #7aa2ff;border-top-color:transparent;animation:recSpin .8s linear infinite;flex-shrink:0;"></div>
+      Loading candidate…
+    </div>`;
+  overlay.classList.add("open");
+
+  // Fetch Firestore candidate doc
+  let cand = {};
+  try {
+    const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const snap = await getDoc(doc(window.db, "candidates", String(candidateId)));
+    if (snap.exists()) cand = snap.data();
+  } catch (e) {
+    console.warn("[CandProfileModal] Firestore fetch failed:", e);
+  }
+
+  const name       = cand.name         || nameHint    || "Candidate";
+  const role       = cand.applied_role || cand.role   || "—";
+  const email      = cand.email        || "";
+  const location   = cand.location_display || cand.location || cand.city || "Location not specified";
+  const resumeText = cand.resume_text  || cand.resumeText || "";
+
+  // Match pills from the in-memory map
+  const idStr   = String(candidateId);
+  const matches = _candidateMatchMap[idStr] || _candidateMatchMap[String(Number(idStr))] || [];
+  const bestJob = matches[0] || null;
+  const jobTitle  = bestJob?.job_title  || jobTitleHint || "—";
+  const company   = bestJob?.company    || companyHint  || _recruiterOrg || "—";
+  const pct       = bestJob?.match_percent ?? matchPct;
+
+  const ringColor = pct == null ? "#6b7fa8" : pct >= 75 ? "#4ade80" : pct >= 50 ? "#fbbf24" : "#7aa2ff";
+  const pctLabel  = pct != null ? `${pct}%` : "?%";
+
+  const matchPillsHTML = matches.length ? `
+    <div class="bm-cpm-match-pills">
+      ${matches.map(m => {
+        const c = m.match_percent >= 75 ? "#4ade80" : m.match_percent >= 50 ? "#fbbf24" : "#7aa2ff";
+        return `<span class="bm-cpm-pill">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+          ${m.job_title}
+          <span class="pct" style="color:${c};">${m.match_percent != null ? m.match_percent + "%" : "?%"}</span>
+        </span>`;
+      }).join("")}
+    </div>` : "";
+
+  const resumeHTML = resumeText ? `
+    <div class="bm-cpm-field">
+      <span class="bm-cpm-label">Resume Snippet</span>
+      <div style="background:#090e1c;border:1px solid rgba(122,162,255,.1);border-radius:10px;
+                  padding:12px 14px;font-size:12px;color:#a0aec0;line-height:1.6;
+                  max-height:130px;overflow-y:auto;">
+        ${resumeText.slice(0, 700).replace(/</g,"&lt;").replace(/>/g,"&gt;")}${resumeText.length > 700 ? "…" : ""}
+      </div>
+    </div>` : "";
+
+  content.innerHTML = `
+    <!-- Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0 0 3px;font-size:20px;color:#e2e8f0;">${name.replace(/</g,"&lt;")}</h2>
+        <p style="margin:0;color:#6b7fa8;font-size:13px;display:flex;align-items:center;gap:5px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+          ${role.replace(/</g,"&lt;")}
+        </p>
+      </div>
+      ${pct != null ? `
+      <div style="position:relative;width:54px;height:54px;flex-shrink:0;" title="${pct}% match">
+        <svg width="54" height="54" viewBox="0 0 54 54" style="transform:rotate(-90deg);">
+          <circle cx="27" cy="27" r="20" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
+          <circle cx="27" cy="27" r="20" fill="none" stroke="${ringColor}" stroke-width="4"
+            stroke-dasharray="${((pct/100)*2*Math.PI*20).toFixed(1)} ${((1-pct/100)*2*Math.PI*20).toFixed(1)}"
+            stroke-linecap="round"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <span style="font-size:12px;font-weight:800;color:${ringColor};">${pctLabel}</span>
+        </div>
+      </div>` : ""}
+    </div>
+
+    <!-- Contact + Location -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      ${email ? `
+      <div class="bm-cpm-field">
+        <span class="bm-cpm-label">Email</span>
+        <p><a href="mailto:${email}" style="color:#7aa2ff;text-decoration:none;">${email}</a></p>
+      </div>` : ""}
+      <div class="bm-cpm-field">
+        <span class="bm-cpm-label">Location</span>
+        <p>${location.replace(/</g,"&lt;")}</p>
+      </div>
+    </div>
+
+    <!-- Org match details -->
+    ${matches.length ? `
+    <div class="bm-cpm-field">
+      <span class="bm-cpm-label">Matched Org Roles</span>
+      <div style="font-size:12px;color:#6b7fa8;margin-bottom:4px;">${company.replace(/</g,"&lt;")}</div>
+      ${matchPillsHTML}
+    </div>` : ""}
+
+    <div class="bm-cpm-divider"></div>
+
+    ${resumeHTML}
+
+    <!-- Action buttons -->
+    <div class="bm-cpm-btn-row">
+      ${email ? `
+      <button class="bm-cpm-btn" onclick="window.location.href='mailto:${email}?subject=Opportunity at ${encodeURIComponent(company)}'">
+        ✉ Email
+      </button>` : ""}
+      <button class="bm-cpm-btn" onclick="
+        window.location.href='rec-actions.html';
+        sessionStorage.setItem('bm_open_candidate_id','${candidateId}');
+      ">
+        ⚡ Recruiter Actions
+      </button>
+      <button class="bm-cpm-btn primary"
+        onclick="window.openCandidateAnalysis && window.openCandidateAnalysis('${candidateId}','${nameHint.replace(/'/g,"\\'")}','${bestJob?.job_id || ""}')">
+        🔍 Deep Analysis
+      </button>
+    </div>
+  `;
+};
+
+
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => { initMap(); loadCandidatesAndMarkers(); });
 } else {

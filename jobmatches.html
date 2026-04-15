@@ -791,12 +791,151 @@ select option { background: #111827; }
 <!-- ════════ SCRIPTS ════════ -->
 <script src="skeleton-loader.js"></script>
 <script type="module" src="auth.js"></script>
+<script type="module" src="apply-job.js"></script>
 <script type="module" src="candidate.js"></script>
 <script type="module" src="api.js"></script>
-<script type="module" src="apply-job.js"></script>
+
+
+<!-- ════════ INLINE APPLY MODAL ════════ -->
+<!-- This modal is opened by window._applyClick() instead of navigating away -->
+<div id="applyOverlay" class="apply-overlay" style="display:none" onclick="if(event.target===this)window.closeApplyModal()">
+  <div class="apply-modal">
+    <button class="apply-modal-close" onclick="window.closeApplyModal()">✕</button>
+    <div style="font-size:11px;color:#7aa2ff;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Quick Apply</div>
+    <h2 id="applyModalTitle" style="margin:0 0 6px;font-size:20px;color:#e2e8f0;">Job Title</h2>
+    <p id="applyModalSub" style="margin:0 0 20px;color:#6b7fa8;font-size:13px;"></p>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a5580;display:block;margin-bottom:8px;">
+        Cover Note <span style="color:#4a5580;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span>
+      </label>
+      <textarea id="applyNoteInput"
+        placeholder="Briefly introduce yourself or why you're a great fit…"
+        style="width:100%;min-height:100px;resize:vertical;
+               background:#090e1c;border:1px solid rgba(122,162,255,.15);
+               border-radius:10px;color:#e2e8f0;font-family:inherit;font-size:13px;
+               padding:12px 14px;outline:none;line-height:1.55;box-sizing:border-box;"
+        onfocus="this.style.borderColor='rgba(122,162,255,.4)'"
+        onblur="this.style.borderColor='rgba(122,162,255,.15)'"
+      ></textarea>
+    </div>
+
+    <div id="applyStatusMsg" style="display:none;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">
+      <button onclick="window.closeApplyModal()" style="font-family:inherit;font-size:13px;font-weight:600;padding:9px 20px;border-radius:9px;cursor:pointer;border:1px solid rgba(122,162,255,.2);background:transparent;color:#7aa2ff;transition:all .18s;">Cancel</button>
+      <button id="applySubmitBtn" onclick="window.submitApplyModal()" style="font-family:inherit;font-size:13px;font-weight:600;padding:9px 20px;border-radius:9px;cursor:pointer;border:1px solid rgba(122,162,255,.4);background:rgba(122,162,255,.14);color:#7aa2ff;transition:all .18s;">
+        🚀 Submit Application
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+.apply-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.78);
+  backdrop-filter: blur(6px); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box;
+}
+.apply-modal {
+  background: #0f1220; border: 1px solid rgba(122,162,255,.15);
+  border-radius: 16px; width: 100%; max-width: 480px;
+  max-height: 88vh; overflow-y: auto; padding: 28px;
+  box-sizing: border-box; position: relative; color: #e2e8f0;
+}
+.apply-modal-close {
+  position: absolute; top: 16px; right: 18px;
+  background: none; border: none; color: #4a5580;
+  font-size: 20px; cursor: pointer; line-height: 1; transition: color .15s;
+}
+.apply-modal-close:hover { color: #e2e8f0; }
+</style>
 
 <!-- ════════ APPLY BUTTON FIX ════════ -->
 <script>
+/* ── Inline Apply Modal handlers ──────────────────────── */
+// Called by window._applyClick() in candidate.js instead of navigating away.
+window.openApplyModal = function(jobId, jobTitle, recruiterId, firestoreId) {
+  window._pendingApply = {
+    jobId:       jobId,
+    jobTitle:    jobTitle,
+    recruiterId: recruiterId,
+    firestoreId: firestoreId || jobId
+  };
+  document.getElementById('applyModalTitle').textContent = jobTitle || 'Apply';
+  document.getElementById('applyModalSub').textContent   = "You're one step away — submit your application to be considered for this role.";
+  document.getElementById('applyStatusMsg').style.display = 'none';
+  document.getElementById('applyNoteInput').value = '';
+  const btn = document.getElementById('applySubmitBtn');
+  btn.disabled = false; btn.textContent = '🚀 Submit Application';
+  document.getElementById('applyOverlay').style.display = 'flex';
+};
+
+window.closeApplyModal = function() {
+  document.getElementById('applyOverlay').style.display = 'none';
+  document.getElementById('applyNoteInput').value = '';
+  document.getElementById('applyStatusMsg').style.display = 'none';
+  delete window._pendingApply;
+};
+
+window.submitApplyModal = async function() {
+  const pending = window._pendingApply;
+  if (!pending) return;
+
+  const note  = document.getElementById('applyNoteInput').value.trim();
+  const btn   = document.getElementById('applySubmitBtn');
+  const msgEl = document.getElementById('applyStatusMsg');
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Submitting…';
+  msgEl.style.display = 'none';
+
+  if (typeof window.applyToJob !== 'function') {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.type = 'module'; s.src = 'apply-job.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  if (typeof window.hasApplied === 'function') {
+    const already = await window.hasApplied(pending.jobId);
+    if (already) {
+      msgEl.textContent = `✋ You've already applied to "${pending.jobTitle}".`;
+      msgEl.style.cssText = 'background:rgba(122,162,255,.07);border:1px solid rgba(122,162,255,.2);color:#7aa2ff;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+      btn.disabled    = false;
+      btn.textContent = '🚀 Submit Application';
+      return;
+    }
+  }
+
+  const ok = await window.applyToJob(
+    pending.jobId, pending.jobTitle,
+    pending.recruiterId, pending.firestoreId, note
+  );
+
+  if (ok) {
+    msgEl.textContent = '✅ Application submitted! Track it in Candidate Actions.';
+    msgEl.style.cssText = 'background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+    btn.textContent = '✓ Applied';
+    // Mark the card button as applied
+    const applyBtns = document.querySelectorAll(`[data-apply-job="${pending.jobId}"]`);
+    applyBtns.forEach(b => {
+      b.textContent = '✓ Applied'; b.disabled = true;
+      b.style.opacity = '0.6'; b.style.cursor = 'default';
+    });
+    setTimeout(() => window.closeApplyModal(), 2000);
+  } else {
+    msgEl.textContent = "You've already applied to this job, or something went wrong. Please try again.";
+    msgEl.style.cssText = 'background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+    btn.disabled    = false;
+    btn.textContent = '🚀 Submit Application';
+  }
+};
+
 // Robust apply handler — resolves apply_url from multiple possible field names
 // and falls back to a Google search so the button is never a dead end.
 window.handleApplyClick = function(btn) {
@@ -823,39 +962,17 @@ window.handleApplyClick = function(btn) {
   const grid = document.getElementById('matchesGrid');
   if (!grid) return;
 
-  function patchCard(card) {
-    const applyBtn = card.querySelector('.match-btn.apply');
-    if (!applyBtn) return;
+ function patchCard(card) {
+  const applyBtn = card.querySelector('.match-btn.apply');
+  if (!applyBtn) return;
 
-    // Read url from the <a> href if it was rendered as a link
-    const existingHref = applyBtn.getAttribute('href');
-    const url = applyBtn.dataset.applyUrl
-      || card.dataset.applyUrl
-      || (existingHref && existingHref !== '#' ? existingHref : null)
-      || null;
+  applyBtn.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
 
-    // Store on card for handleApplyClick
-    if (url && url.startsWith('http')) {
-      card.dataset.applyUrl = url;
-      applyBtn.dataset.applyUrl = url;
-    }
-
-    // Replace element so we can set onclick cleanly
-    applyBtn.removeAttribute('href');
-    applyBtn.setAttribute('role', 'button');
-    applyBtn.onclick = function(e) {
-      e.preventDefault();
-      const resolvedUrl = applyBtn.dataset.applyUrl || card.dataset.applyUrl || null;
-      if (resolvedUrl && resolvedUrl.startsWith('http')) {
-        window.open(resolvedUrl, '_blank', 'noopener');
-      } else {
-        const title   = card.querySelector('.match-card-title')?.textContent || '';
-        const company = card.querySelector('.match-card-company')?.textContent || '';
-        const query   = encodeURIComponent(`${title} ${company} apply job`.trim());
-        window.open(`https://www.google.com/search?q=${query}`, '_blank', 'noopener');
-      }
-    };
-  }
+    window._applyClick(applyBtn);
+  };
+}
 
   const observer = new MutationObserver(mutations => {
     mutations.forEach(m => {

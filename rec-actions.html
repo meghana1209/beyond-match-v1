@@ -636,7 +636,7 @@ function buildCard(app) {
       ${coverPreview}
       ${recNotePreview}
 
-      <div class="app-actions">
+     <div class="app-actions">
         <button class="app-btn" onclick="openProfile('${app.id}')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           Profile
@@ -647,6 +647,15 @@ function buildCard(app) {
         <button class="app-btn" onclick="openCandidateAnalysis('${app.candidate_id}','${escAttr(app.candidateName)}','${app.job_id}')">
           🔍 Analyse
         </button>
+        <select class="app-btn" style="cursor:pointer;padding:6px 10px;"
+          onchange="setStatus('${app.id}',this.value,'${app.candidateUserUid}','${escAttr(app.candidateName)}','${escAttr(app.jobTitle)}');this.value='';">
+          <option value="" disabled selected>⟳ Update status…</option>
+          <option value="reviewing"   ${status==='reviewing'   ?'disabled':''}>Reviewing</option>
+          <option value="shortlisted" ${status==='shortlisted' ?'disabled':''}>Shortlisted</option>
+          <option value="interview"   ${status==='interview'   ?'disabled':''}>Interview</option>
+          <option value="hired"       ${status==='hired'       ?'disabled':''}>✓ Hire</option>
+          <option value="rejected"    ${status==='rejected'    ?'disabled':''}>✗ Reject</option>
+        </select>
       </div>
     </div>`;
 }

@@ -535,7 +535,7 @@ function _renderGrid(candidates, llmMap) {
             👤 Profile
           </button>
           <button class="card-btn invite"
-            onclick="openInviteModal('${c.candidate_id}','${(name).replace(/'/g,"\\'")}','${(c.email||'').replace(/'/g,"\\'")}','${_currentJobId}')">
+            onclick="openInviteModal('${c.candidate_id}','${(name).replace(/'/g,"\\'")}','${(c.email||'').replace(/'/g,"\\'")}','${_currentJobId}', document.getElementById('roleDropdown').selectedOptions[0].text)">
             ✉ Invite
           </button>
           <button class="card-btn analyse"
@@ -627,33 +627,42 @@ import {
 /* ── Invite state ── */
 let _inviteState = null;
 
-window.openInviteModal = async function(candidateId, name, email, jobId) {
-  // Need the job title and recruiter info
-  let jobTitle = jobId;
+window.openInviteModal = async function(candidateId, name, email, jobId, jobTitle) {
+
+  jobTitle = jobTitle || 'Unknown Role';
+
   let recruiterId = null;
   let recruiterName = '';
 
-  // Fetch job title from orgJobs (populated by api.js) or Firestore
-  try {
-    const jSnap = await getDoc(doc(db, 'posted_jobs', jobId));
-    if (jSnap.exists()) jobTitle = jSnap.data().title || jobId;
-  } catch {}
-
-  // Get recruiter uid from auth
   const user = auth.currentUser;
-  if (!user) { window.showToast?.('Please log in first.', 'warning'); return; }
+  if (!user) {
+    window.showToast?.('Please log in first.', 'warning');
+    return;
+  }
+
   recruiterId = user.uid;
 
-  // Get recruiter display name from Firestore users doc
   try {
     const uSnap = await getDoc(doc(db, 'users', user.uid));
-    if (uSnap.exists()) recruiterName = uSnap.data().name || uSnap.data().displayName || '';
+    if (uSnap.exists()) {
+      const u = uSnap.data();
+      recruiterName = u.name || u.displayName || 'A recruiter';
+    }
   } catch {}
 
-  _inviteState = { candidateId, name, email, jobId, jobTitle, recruiterId, recruiterName };
+  _inviteState = {
+    candidateId,
+    name,
+    email,
+    jobId,
+    jobTitle,
+    recruiterId,
+    recruiterName
+  };
 
   document.getElementById('inviteModalName').textContent = name || 'Candidate';
   document.getElementById('inviteModalJob').textContent  = `Inviting to apply for: ${jobTitle}`;
+
   document.getElementById('inviteNoteInput').value = '';
   document.getElementById('inviteStatusMsg').style.display = 'none';
 
