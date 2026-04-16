@@ -719,7 +719,9 @@ window.submitInvite = async function() {
   } catch {}
 
   // Build the deep-link URL for the candidate to click and apply directly
-  const applyUrl = `cand-actions.html?apply=${encodeURIComponent(jobId)}&title=${encodeURIComponent(jobTitle)}&recruiter=${encodeURIComponent(recruiterId)}`;
+  // Points to jobmatches.html so the Quick Apply modal opens there, and
+  // after submission the candidate is already on their matches page.
+  const applyUrl = `jobmatches.html?apply=${encodeURIComponent(jobId)}&title=${encodeURIComponent(jobTitle)}&recruiter=${encodeURIComponent(recruiterId)}`;
 
   try {
     // 1. Write notification to Firestore (candidate sees it in their bell)

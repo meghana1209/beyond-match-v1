@@ -856,12 +856,13 @@ select option { background: #111827; }
 <script>
 /* ── Inline Apply Modal handlers ──────────────────────── */
 // Called by window._applyClick() in candidate.js instead of navigating away.
-window.openApplyModal = function(jobId, jobTitle, recruiterId, firestoreId) {
+window.openApplyModal = function(jobId, jobTitle, recruiterId, firestoreId, company) {
   window._pendingApply = {
     jobId:       jobId,
     jobTitle:    jobTitle,
     recruiterId: recruiterId,
-    firestoreId: firestoreId || jobId
+    firestoreId: firestoreId || jobId,
+    company:     company || ""
   };
   document.getElementById('applyModalTitle').textContent = jobTitle || 'Apply';
   document.getElementById('applyModalSub').textContent   = "You're one step away — submit your application to be considered for this role.";
@@ -880,8 +881,12 @@ window.closeApplyModal = function() {
 };
 
 window.submitApplyModal = async function() {
+  // FIX: Prevent simultaneous submissions from rapid double-clicking the button.
+  if (window._modalSubmitting) return;
+  window._modalSubmitting = true;
+
   const pending = window._pendingApply;
-  if (!pending) return;
+  if (!pending) { window._modalSubmitting = false; return; }
 
   const note  = document.getElementById('applyNoteInput').value.trim();
   const btn   = document.getElementById('applySubmitBtn');
@@ -891,48 +896,53 @@ window.submitApplyModal = async function() {
   btn.textContent = '⏳ Submitting…';
   msgEl.style.display = 'none';
 
-  if (typeof window.applyToJob !== 'function') {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.type = 'module'; s.src = 'apply-job.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-    await new Promise(r => setTimeout(r, 200));
-  }
+  try {
+    if (typeof window.applyToJob !== 'function') {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.type = 'module'; s.src = 'apply-job.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-  if (typeof window.hasApplied === 'function') {
-    const already = await window.hasApplied(pending.jobId);
-    if (already) {
-      msgEl.textContent = `✋ You've already applied to "${pending.jobTitle}".`;
-      msgEl.style.cssText = 'background:rgba(122,162,255,.07);border:1px solid rgba(122,162,255,.2);color:#7aa2ff;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+    if (typeof window.hasApplied === 'function') {
+      const already = await window.hasApplied(pending.jobId);
+      if (already) {
+        msgEl.textContent = `✋ You've already applied to "${pending.jobTitle}".`;
+        msgEl.style.cssText = 'background:rgba(122,162,255,.07);border:1px solid rgba(122,162,255,.2);color:#7aa2ff;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+        btn.disabled    = false;
+        btn.textContent = '🚀 Submit Application';
+        return;
+      }
+    }
+
+    // FIX: Pass pending.company as 6th arg so applyToJob stores the correct
+    // company_name in Firestore without needing an extra posted_jobs lookup.
+    const ok = await window.applyToJob(
+      pending.jobId, pending.jobTitle,
+      pending.recruiterId, pending.firestoreId, note, pending.company
+    );
+
+    if (ok) {
+      msgEl.textContent = '✅ Application submitted! Track it in Candidate Actions.';
+      msgEl.style.cssText = 'background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
+      btn.textContent = '✓ Applied';
+      const applyBtns = document.querySelectorAll(`[data-apply-job="${pending.jobId}"]`);
+      applyBtns.forEach(b => {
+        b.textContent = '✓ Applied'; b.disabled = true;
+        b.style.opacity = '0.6'; b.style.cursor = 'default';
+      });
+      setTimeout(() => window.closeApplyModal(), 2000);
+    } else {
+      msgEl.textContent = "You've already applied to this job, or something went wrong. Please try again.";
+      msgEl.style.cssText = 'background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
       btn.disabled    = false;
       btn.textContent = '🚀 Submit Application';
-      return;
     }
-  }
-
-  const ok = await window.applyToJob(
-    pending.jobId, pending.jobTitle,
-    pending.recruiterId, pending.firestoreId, note
-  );
-
-  if (ok) {
-    msgEl.textContent = '✅ Application submitted! Track it in Candidate Actions.';
-    msgEl.style.cssText = 'background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
-    btn.textContent = '✓ Applied';
-    // Mark the card button as applied
-    const applyBtns = document.querySelectorAll(`[data-apply-job="${pending.jobId}"]`);
-    applyBtns.forEach(b => {
-      b.textContent = '✓ Applied'; b.disabled = true;
-      b.style.opacity = '0.6'; b.style.cursor = 'default';
-    });
-    setTimeout(() => window.closeApplyModal(), 2000);
-  } else {
-    msgEl.textContent = "You've already applied to this job, or something went wrong. Please try again.";
-    msgEl.style.cssText = 'background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px;';
-    btn.disabled    = false;
-    btn.textContent = '🚀 Submit Application';
+  } finally {
+    window._modalSubmitting = false;
   }
 };
 
@@ -955,6 +965,46 @@ window.handleApplyClick = function(btn) {
     window.open(`https://www.google.com/search?q=${query}`, '_blank', 'noopener');
   }
 };
+
+/* ─── Apply-from-Link: read URL params sent by recruiter invite ───────────
+   When the candidate clicks "Apply Now" in their notification panel the URL
+   is: jobmatches.html?apply=<jobId>&title=<title>&recruiter=<uid>
+   We read those params, populate _pendingApply, and open the Quick Apply modal.
+   ─────────────────────────────────────────────────────────────────────────── */
+(function checkApplyParam() {
+  const params      = new URLSearchParams(window.location.search);
+  const applyJob    = params.get('apply');
+  const title       = params.get('title')       || 'this job';
+  const recruiter   = params.get('recruiter')   || '';
+  const firestoreId = params.get('firestore_id')|| '';
+
+  if (!applyJob) return;
+
+  function openModal() {
+    const overlay = document.getElementById('applyOverlay');
+    if (!overlay) { setTimeout(openModal, 80); return; }
+
+    window._pendingApply = {
+      jobId:       applyJob,
+      jobTitle:    decodeURIComponent(title),
+      recruiterId: recruiter,
+      firestoreId: firestoreId || applyJob,
+      company:     params.get('company') || ''
+    };
+
+    document.getElementById('applyModalTitle').textContent = decodeURIComponent(title);
+    document.getElementById('applyModalSub').textContent   = "You're one step away — submit your application to be considered for this role.";
+    document.getElementById('applyStatusMsg').style.display = 'none';
+    document.getElementById('applyNoteInput').value = '';
+    const btn = document.getElementById('applySubmitBtn');
+    btn.disabled = false; btn.textContent = '🚀 Submit Application';
+    overlay.style.display = 'flex';
+
+    // Clean the URL so reloading doesn't re-trigger the modal
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  openModal();
+})();
 
 // Patch: intercept any apply button rendered by candidate.js / api.js
 // by observing DOM mutations and rewriting onclick handlers.

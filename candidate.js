@@ -575,6 +575,9 @@ async function loadCandidateJobMatches() {
   data-recruiter-id="${cardData.recruiter_id || ''}"
   data-firestore-id="${cardData.firestore_id || cardData.job_id || cardData.id}"
   data-candidate-id="${candidateId}"
+  data-source="${cardData.source || ''}"
+  data-company="${(cardData.company || '').replace(/"/g, '&quot;')}"
+  data-apply-url="${(cardData.apply_url || '#').replace(/"/g, '&quot;')}"
   onclick="window._applyClick(this)">
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -840,15 +843,41 @@ window._applyClick = async function (btn) {
 
   const firestoreId = btn.dataset.firestoreId;
 
-  console.log("APPLY CLICKED", jobId);
+  // FIX: Read source and apply_url from the card data so we can route
+  // external (API) jobs to their URL instead of opening the modal.
+  const cardData   = window.__jobCardData?.[jobId] || {};
+  const source     = (btn.dataset.source || cardData.source || "").toLowerCase();
+  const applyUrl   = btn.dataset.applyUrl || cardData.apply_url || "";
+  const company    = btn.dataset.company  || cardData.company   || "";
+
+  console.log("APPLY CLICKED", jobId, "source:", source || "(none)", "recruiter:", recruiterId);
 
   // FIX: Guard — if jobId is still undefined here don't proceed.
-  // Passing undefined to Firestore where() throws:
-  // "Unsupported field value: undefined"
   if (!jobId) {
     console.error("_applyClick: could not resolve jobId from button", btn);
     if (typeof window.showToast === "function") {
       window.showToast("Could not identify the job. Please refresh and try again.", "error");
+    }
+    return;
+  }
+
+  // FIX: Route external / API-sourced jobs to their external apply URL.
+  // A job is "internal" (BeyondMatch-posted) if:
+  //   • source === "beyondmatch", OR
+  //   • source is empty but a recruiterId is present (recruiter posted it without a source tag)
+  // Everything else is an external API job — open its URL directly.
+  const isInternal = source === "beyondmatch" || (!source && !!recruiterId);
+
+  if (!isInternal) {
+    // External job — redirect to the job board URL, don't open the modal.
+    if (typeof window.openApplyLink === "function") {
+      window.openApplyLink(applyUrl);
+    } else if (applyUrl && applyUrl !== "#") {
+      window.open(applyUrl, "_blank", "noopener,noreferrer");
+    } else {
+      if (typeof window.showToast === "function") {
+        window.showToast("No application link available for this job.", "warning");
+      }
     }
     return;
   }
@@ -858,10 +887,11 @@ window._applyClick = async function (btn) {
     return;
   }
 
-  // Open the inline apply modal (defined in jobmatches.html) so the
-  // candidate can add a cover note before submitting.
+  // Internal BeyondMatch job — open the inline apply modal so the candidate
+  // can add a cover note before submitting.
   if (typeof window.openApplyModal === "function") {
-    window.openApplyModal(jobId, jobTitle, recruiterId, firestoreId);
+    // FIX: pass company so the modal can forward it to applyToJob → Firestore
+    window.openApplyModal(jobId, jobTitle, recruiterId, firestoreId, company);
     return;
   }
 
@@ -869,7 +899,7 @@ window._applyClick = async function (btn) {
   btn.disabled  = true;
   btn.innerText = "Applying...";
 
-  const success = await window.applyToJob(jobId, jobTitle, recruiterId, firestoreId);
+  const success = await window.applyToJob(jobId, jobTitle, recruiterId, firestoreId, "", company);
 
   if (success) {
     btn.innerText         = "Applied ✓";

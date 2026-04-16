@@ -77,6 +77,13 @@ function waitForAuth() {
 }
 
 /* ─────────────────────────────────────────────────
+   _isSubmitting guard
+   Prevents simultaneous duplicate submissions when the user
+   clicks Apply more than once before the first call resolves.
+   ───────────────────────────────────────────────── */
+let _isSubmitting = false;
+
+/* ─────────────────────────────────────────────────
    applyToJob
    Call this when a candidate clicks the Apply button.
 
@@ -84,9 +91,26 @@ function waitForAuth() {
    @param {string} jobTitle         — display title of the job
    @param {string} recruiterId      — uid of the recruiter who posted the job
    @param {string} [jobFirestoreId] — Firestore doc id if different from jobId
+   @param {string} [candidateNote]  — optional cover note from the modal
+   @param {string} [companyName]    — company name passed from the card (avoids Firestore lookup)
    ───────────────────────────────────────────────── */
-window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId, candidateNote) {
-  // FIX: Reject undefined/null jobId immediately.
+window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId, candidateNote, companyName) {
+  // FIX: Prevent simultaneous duplicate submissions (rapid double-click or
+  // multiple Apply buttons clicked before the first resolves).
+  if (_isSubmitting) {
+    console.warn("applyToJob: submission already in progress, ignoring duplicate call.");
+    return false;
+  }
+  _isSubmitting = true;
+
+  try {
+    return await _doApply(jobId, jobTitle, recruiterId, jobFirestoreId, candidateNote, companyName);
+  } finally {
+    _isSubmitting = false;
+  }
+};
+
+async function _doApply(jobId, jobTitle, recruiterId, jobFirestoreId, candidateNote, companyName) {
   // If jobId is undefined, the Firestore where("job_id", "==", undefined) call
   // throws: "FirebaseError: Unsupported field value: undefined".
   // This happens when _applyClick() in candidate.js fails to resolve the id
@@ -134,15 +158,20 @@ window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId
     }
   } catch { /* use fallbacks */ }
 
-  // fetch company name from the job posting so cards/modals can display it
-  let companyName = "";
-  try {
-    const jobSnap = await getDoc(doc(db, "posted_jobs", jobFirestoreId || jobId));
-    if (jobSnap.exists()) {
-      const jd = jobSnap.data();
-      companyName = jd.organisation_name || jd.company || jd.company_name || "";
-    }
-  } catch { /* non-critical */ }
+  // fetch company name — use the value passed from the card first.
+  // Only fall back to a Firestore lookup if we don't have it yet AND
+  // jobFirestoreId looks like a real Firestore doc ID (i.e. the job was
+  // posted via rec-postjob.html, not fetched from the external API).
+  let resolvedCompany = companyName || "";
+  if (!resolvedCompany && jobFirestoreId && jobFirestoreId !== jobId) {
+    try {
+      const jobSnap = await getDoc(doc(db, "posted_jobs", jobFirestoreId));
+      if (jobSnap.exists()) {
+        const jd = jobSnap.data();
+        resolvedCompany = jd.organisation_name || jd.company || jd.company_name || "";
+      }
+    } catch { /* non-critical */ }
+  }
 
   // check for duplicate application
   // Query by candidate_user_id (Firebase UID) + job_id — candidate_user_id is
@@ -172,7 +201,7 @@ window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId
       job_id:             jobId,
       job_firestore_id:   jobFirestoreId || jobId,
       job_title:          jobTitle,
-      company_name:       companyName,
+      company_name:       resolvedCompany,
       candidate_id:       candidateId,
       candidate_user_id:  user.uid,        // Firebase UID — used by Firestore rules & queries
       candidate_name:     candidateName,
@@ -214,7 +243,7 @@ window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId
 
   safeToast(`Applied to ${jobTitle}!`, "success", "Application Sent");
   return true;
-};
+}
 
 
 /* ─────────────────────────────────────────────────

@@ -853,8 +853,12 @@ window.closeApplyModal = function() {
 };
 
 window.submitApplyModal = async function() {
+  // FIX: Prevent simultaneous submissions from rapid double-clicking the button.
+  if (window._modalSubmitting) return;
+  window._modalSubmitting = true;
+
   const pending = window._pendingApply;
-  if (!pending) return;
+  if (!pending) { window._modalSubmitting = false; return; }
 
   const note    = document.getElementById('applyNoteInput').value.trim();
   const btn     = document.getElementById('applySubmitBtn');
@@ -864,49 +868,56 @@ window.submitApplyModal = async function() {
   btn.textContent = '⏳ Submitting…';
   msgEl.style.display = 'none';
 
-  // apply-job.js exposes window.applyToJob — load it if not present
-  if (typeof window.applyToJob !== 'function') {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.type = 'module'; s.src = 'apply-job.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-    // Give the module a moment to register window.applyToJob
-    await new Promise(r => setTimeout(r, 200));
-  }
+  try {
+    // apply-job.js exposes window.applyToJob — load it if not present
+    if (typeof window.applyToJob !== 'function') {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.type = 'module'; s.src = 'apply-job.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      // Give the module a moment to register window.applyToJob
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-  // Check for duplicate before submitting
-  if (typeof window.hasApplied === 'function') {
-    const alreadyApplied = await window.hasApplied(pending.jobId);
-    if (alreadyApplied) {
-      msgEl.textContent    = `✋ You've already applied to "${pending.jobTitle}". Check your applications below.`;
-      msgEl.style.cssText += ';background:rgba(122,162,255,.07);border:1px solid rgba(122,162,255,.2);color:#7aa2ff;display:block;';
+    // Check for duplicate before submitting
+    if (typeof window.hasApplied === 'function') {
+      const alreadyApplied = await window.hasApplied(pending.jobId);
+      if (alreadyApplied) {
+        msgEl.textContent    = `✋ You've already applied to "${pending.jobTitle}". Check your applications below.`;
+        msgEl.style.cssText += ';background:rgba(122,162,255,.07);border:1px solid rgba(122,162,255,.2);color:#7aa2ff;display:block;';
+        btn.disabled         = false;
+        btn.textContent      = '🚀 Submit Application';
+        return;
+      }
+    }
+
+    // FIX: Pass pending.company as 6th arg so applyToJob stores the correct
+    // company_name in Firestore without needing an extra posted_jobs lookup.
+    const ok = await window.applyToJob(
+      pending.jobId,
+      pending.jobTitle,
+      pending.recruiterId,
+      pending.firestoreId || pending.jobId,
+      note,
+      pending.company || ""
+    );
+
+    if (ok) {
+      msgEl.textContent    = '✅ Application submitted! You can track it below.';
+      msgEl.style.cssText += ';background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;';
+      btn.textContent      = '✓ Applied';
+      btn.disabled         = true;
+      setTimeout(() => window.closeApplyModal(), 2200);
+    } else {
+      msgEl.textContent    = `You've already applied to this job, or something went wrong. Please log in and try again.`;
+      msgEl.style.cssText += ';background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;';
       btn.disabled         = false;
       btn.textContent      = '🚀 Submit Application';
-      return;
     }
-  }
-
-  const ok = await window.applyToJob(
-    pending.jobId,
-    pending.jobTitle,
-    pending.recruiterId,
-    pending.firestoreId || pending.jobId,   // jobFirestoreId
-    note
-  );
-
-  if (ok) {
-    msgEl.textContent    = '✅ Application submitted! You can track it below.';
-    msgEl.style.cssText += ';background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);color:#4ade80;display:block;';
-    btn.textContent      = '✓ Applied';
-    btn.disabled         = true;
-    setTimeout(() => window.closeApplyModal(), 2200);
-  } else {
-    msgEl.textContent    = `You've already applied to this job, or something went wrong. Please log in and try again.`;
-    msgEl.style.cssText += ';background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);color:#f87171;display:block;';
-    btn.disabled         = false;
-    btn.textContent      = '🚀 Submit Application';
+  } finally {
+    window._modalSubmitting = false;
   }
 };
 

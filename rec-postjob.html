@@ -664,36 +664,105 @@ async function aiParse(){
   hideErr(); bar(20);
   try{
     const {callGemini}=await import("./gemini.js");
-    const raw=await callGemini(`
-You are a job description parser. Extract structured data from the JD text.
-Return ONLY a raw JSON object (no markdown, no backticks):
-{"title":"","location":"","remote":"onsite|remote|hybrid",
-"employment_type":"Full-time|Part-time|Contract|Internship|Freelance",
-"salary_min":0,"salary_max":0,"experience":"0-1|1-3|3-5|5-8|8+|",
-"level":"Junior|Mid|Senior|Lead|Manager|Director|VP|",
-"skills":[],"description":"","industry":"","function":"","apply_url":""}
-JD:\n${txt.slice(0,3000)}`);
-    const d=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    const raw=await callGemini(`You are a job description parser. Extract structured data from the JD text below.
+
+IMPORTANT RULES:
+- salary_min and salary_max must be plain integers with NO commas, symbols, or letters (e.g. 400000 not ₹4,00,000)
+- If salary uses Indian lakh format like "4,00,000" convert it: remove commas → 400000
+- remote must be exactly one of: "onsite" | "remote" | "hybrid" — infer from work mode, location, or keywords like Hybrid/Remote/WFH
+- experience must be exactly one of: "0-1" | "1-3" | "3-5" | "5-8" | "8+" | "" — map ranges like "1–3 years" → "1-3"
+- level must be exactly one of: "Junior" | "Mid" | "Senior" | "Lead" | "Manager" | "Director" | "VP" | ""
+- employment_type must be exactly one of: "Full-time" | "Part-time" | "Contract" | "Internship" | "Freelance"
+- industry must be exactly one of: "Technology" | "Finance" | "Healthcare" | "E-commerce" | "Education" | "Manufacturing" | "Media & Entertainment" | "Consulting" | "Government" | "Non-profit" | "Other"
+- function must be exactly one of: "Engineering" | "Data Science / Analytics" | "Design / UX" | "Product Management" | "Marketing" | "Sales" | "Operations" | "HR / Talent" | "Finance / Accounting" | "Legal" | "Customer Success" | "Other"
+- deadline must be in YYYY-MM-DD format if found, else ""
+- openings must be a plain integer, default 1
+- skills must be an array of short skill strings (no duplicates, max 15)
+- description should be the full role overview + responsibilities + requirements as a clean paragraph, no bullet symbols
+- location should be city + country only, no work mode suffix
+- apply_url only if an explicit URL is present in the text, else ""
+
+Return ONLY a raw JSON object, no markdown, no backticks, no explanation:
+{"title":"","location":"","remote":"onsite","employment_type":"Full-time","salary_min":0,"salary_max":0,"experience":"","level":"","skills":[],"description":"","industry":"","function":"","deadline":"","openings":1,"apply_url":""}
+
+JD:
+${txt.slice(0,4000)}`);
+
+    const d=JSON.parse(raw.replace(/```json[\s\S]*?```|```/g,"").trim());
+
+    // ── title ──
     if(d.title){$("f_title").value=d.title;cc($("f_title"),"tc");}
-    if(d.location) $("f_loc").value=d.location;
-    if(d.remote)   $("f_rem").value={onsite:"onsite",remote:"remote",hybrid:"hybrid"}[d.remote]||"onsite";
-    if(d.employment_type) document.querySelectorAll(".tp").forEach(b=>b.classList.toggle("on",b.dataset.v===d.employment_type));
-    if(d.salary_min>0) $("f_smin").value=d.salary_min;
-    if(d.salary_max>0) $("f_smax").value=d.salary_max;
-    if(d.experience) $("f_exp").value=d.experience;
-    if(d.level)      $("f_lvl").value=d.level;
-    if(d.description){$("f_desc").value=d.description;cc($("f_desc"),"dc");}
-    if(d.industry)   $("f_ind").value=d.industry;
-    if(d.function)   $("f_fun").value=d.function;
-    if(d.apply_url)  $("f_apply").value=d.apply_url;
-    if(Array.isArray(d.skills)){
-      skArr.length=0; document.querySelectorAll(".skt").forEach(t=>t.remove());
-      d.skills.slice(0,20).forEach(s=>addSk(s));
+
+    // ── location (strip any trailing work-mode words the AI may have added) ──
+    if(d.location) $("f_loc").value=d.location.replace(/[,\s]*(hybrid|remote|onsite|wfh)$/i,"").trim();
+
+    // ── work mode ──
+    const remMap={onsite:"onsite",remote:"remote",hybrid:"hybrid"};
+    if(d.remote && remMap[d.remote.toLowerCase()]) $("f_rem").value=remMap[d.remote.toLowerCase()];
+
+    // ── employment type pills ──
+    if(d.employment_type){
+      document.querySelectorAll(".tp").forEach(b=>b.classList.toggle("on",b.dataset.v===d.employment_type));
     }
+
+    // ── salary — strip any leftover non-digit chars just in case ──
+    const cleanInt = v => parseInt(String(v).replace(/[^\d]/g,""))||0;
+    const sMin=cleanInt(d.salary_min); const sMax=cleanInt(d.salary_max);
+    if(sMin>0) $("f_smin").value=sMin;
+    if(sMax>0) $("f_smax").value=sMax;
+
+    // ── experience — normalise em-dash / en-dash to hyphen then match ──
+    if(d.experience){
+      const expNorm=String(d.experience).replace(/[–—]/g,"-").trim();
+      const validExp=["0-1","1-3","3-5","5-8","8+"];
+      $("f_exp").value=validExp.includes(expNorm)?expNorm:"";
+    }
+
+    // ── level ──
+    if(d.level){
+      const validLvl=["Junior","Mid","Senior","Lead","Manager","Director","VP"];
+      $("f_lvl").value=validLvl.includes(d.level)?d.level:"";
+    }
+
+    // ── description ──
+    if(d.description){$("f_desc").value=d.description;cc($("f_desc"),"dc");}
+
+    // ── industry — fuzzy match to select options ──
+    if(d.industry){
+      const indOpts=[...document.querySelectorAll("#f_ind option")].map(o=>o.value);
+      const best=indOpts.find(o=>o&&d.industry.toLowerCase().includes(o.toLowerCase()))
+                 || indOpts.find(o=>o&&o.toLowerCase().includes(d.industry.toLowerCase().split(/[\s/]/)[0]));
+      if(best) $("f_ind").value=best;
+    }
+
+    // ── function — fuzzy match to select options ──
+    if(d.function){
+      const funOpts=[...document.querySelectorAll("#f_fun option")].map(o=>o.value);
+      const funLow=d.function.toLowerCase();
+      const best=funOpts.find(o=>o&&funLow.includes(o.toLowerCase().split(/[\s/]/)[0]))
+                 || funOpts.find(o=>o&&o.toLowerCase().includes(funLow.split(/[\s/]/)[0]));
+      if(best) $("f_fun").value=best;
+    }
+
+    // ── deadline ──
+    if(d.deadline && /^\d{4}-\d{2}-\d{2}$/.test(d.deadline)) $("f_dl").value=d.deadline;
+
+    // ── openings ──
+    if(d.openings && parseInt(d.openings)>0) $("f_op").value=parseInt(d.openings);
+
+    // ── apply url ──
+    if(d.apply_url) $("f_apply").value=d.apply_url;
+
+    // ── skills ──
+    if(Array.isArray(d.skills)&&d.skills.length){
+      skArr.length=0; document.querySelectorAll(".skt").forEach(t=>t.remove());
+      d.skills.slice(0,15).forEach(s=>addSk(s));
+    }
+
     bar(100);
     if(window.showToast) showToast("Form auto-filled ✓","success");
     mode("manual");
-  }catch(err){bar(100);showErr("AI parse failed: "+err.message);}
+  }catch(err){bar(100);showErr("AI parse failed: "+err.message);console.error(err);}
   finally{
     btn.disabled=false;
     btn.innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Auto-fill form with AI`;

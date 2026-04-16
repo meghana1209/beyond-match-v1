@@ -22,6 +22,47 @@ a.modern-view-btn:hover {
   border-color: rgba(122,162,255,.5);
 }
 
+/* ── Source filter tabs ── */
+.source-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.source-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #4a5580;
+  margin-right: 2px;
+}
+.src-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 5px 14px; border-radius: 20px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: #8a9cc8;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.src-tab:hover {
+  background: rgba(122,162,255,.08);
+  border-color: rgba(122,162,255,.25);
+  color: #c5d3ff;
+}
+.src-tab.active-all   { background: rgba(122,162,255,.14); border-color: rgba(122,162,255,.4);  color: #7aa2ff; }
+.src-tab.active-int   { background: rgba(74,222,128,.12);  border-color: rgba(74,222,128,.35);  color: #4ade80; }
+.src-tab.active-ext   { background: rgba(122,162,255,.10); border-color: rgba(122,162,255,.28); color: #7aa2ff; }
+.src-tab .src-count {
+  font-size: 10px; font-weight: 700;
+  border-radius: 10px; padding: 1px 6px; line-height: 1.5;
+  background: rgba(122,162,255,.15); color: #7aa2ff;
+}
+.src-tab.active-int .src-count { background: rgba(74,222,128,.2); color: #4ade80; }
+
 /* ── Location tabs ── */
 .location-tabs-row {
   display: flex;
@@ -106,8 +147,19 @@ a.modern-view-btn:hover {
     <input type="text" id="searchInput" class="modern-search input" placeholder="Search job title…" />
   </div>
 
+  <!-- SOURCE FILTER -->
+  <div class="source-filter-row">
+    <span class="source-filter-label">Source:</span>
+    <button id="srcAllBtn"  class="src-tab active-all" data-src="">All <span id="srcAllCount"  class="src-count">0</span></button>
+    <button id="srcIntBtn"  class="src-tab" data-src="internal">✦ Internal <span id="srcIntCount"  class="src-count">0</span></button>
+    <button id="srcExtBtn"  class="src-tab" data-src="external">⬡ External <span id="srcExtCount"  class="src-count">0</span></button>
+  </div>
+
   <!-- LOCATION TABS -->
-  <div id="locationTabsRow" class="location-tabs-row"></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;">
+    <span class="source-filter-label">Location:</span>
+    <div id="locationTabsRow" class="location-tabs-row" style="margin-bottom:0;margin-top:0;flex:1;"></div>
+  </div>
 
   <!-- JOBS GRID -->
   <div class="jobs-grid-wrapper">

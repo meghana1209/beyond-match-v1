@@ -481,16 +481,48 @@ async function fetchOrgJobs(companyName) {
   return jobs;
 }
 
+async function fetchPostedJobsFromFirestore(recruiterUid) {
+  // Fetch jobs posted by this recruiter via rec-postjob.html (source:"beyondmatch")
+  try {
+    const q    = query(collection(db, "posted_jobs"), where("recruiter_id", "==", recruiterUid));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+      const data = d.data();
+      return { ...data, job_id: data.job_id || d.id, _firestoreId: d.id, _source: "internal" };
+    });
+  } catch { return []; }
+}
+
 async function loadRecruiterJobs() {
-  const [fetchedOrgJobs, allRes] = await Promise.all([
+  const currentUser = auth.currentUser;
+
+  const [fetchedOrgJobs, allRes, firestorePosted] = await Promise.all([
     fetchOrgJobs(recruiterOrg),
-    apiFetch("/jobs")
+    apiFetch("/jobs"),
+    currentUser ? fetchPostedJobsFromFirestore(currentUser.uid) : Promise.resolve([])
   ]);
-  orgJobs = fetchedOrgJobs;
-  allJobs = allRes.jobs || normalizeApiResponse(allRes);
+
+  // Tag all API-sourced org jobs as external
+  const taggedOrgJobs = fetchedOrgJobs.map(j => ({ ...j, _source: "external" }));
+
+  // Merge: internal jobs first; skip external if same job_id already in internal
+  const internalIds = new Set(firestorePosted.map(j => j.job_id));
+  orgJobs = [
+    ...firestorePosted,
+    ...taggedOrgJobs.filter(j => !internalIds.has(j.job_id))
+  ];
+
+  allJobs = (allRes.jobs || normalizeApiResponse(allRes)).map(j => ({ ...j, _source: "external" }));
 
   renderRecruiterJobs();
   populateLocationFilter();
+  // Refresh source count badges after data is loaded
+  const _el = id => document.getElementById(id);
+  const _intC = orgJobs.filter(j => j._source === 'internal').length;
+  const _extC = orgJobs.filter(j => j._source === 'external').length;
+  if (_el('srcAllCount')) _el('srcAllCount').textContent = orgJobs.length;
+  if (_el('srcIntCount')) _el('srcIntCount').textContent = _intC;
+  if (_el('srcExtCount')) _el('srcExtCount').textContent = _extC;
 }
 
 function getJobLocation(job) {
@@ -532,6 +564,11 @@ function renderRecruiterJobs() {
 
   let filtered = showAll ? [...allJobs] : [...orgJobs];
 
+  // Source filter (only meaningful in My Organisation tab)
+  if (!showAll && activeSourceFilter) {
+    filtered = filtered.filter(j => j._source === activeSourceFilter);
+  }
+
   const searchTerm = document.getElementById("searchInput")?.value.toLowerCase() || "";
   if (searchTerm) {
     filtered = filtered.filter(j => j.title?.toLowerCase().includes(searchTerm));
@@ -559,15 +596,37 @@ function renderRecruiterJobs() {
   if (!filtered.length) { tableEl.innerHTML = "<p>No jobs found.</p>"; return; }
 
   tableEl.innerHTML = filtered.map(job => {
-    // Recruiters see "View Matches" → cand-matches.html pre-selecting this job
-    // and "Post Similar" → rec-postjob.html. No apply link for recruiters.
-    const matchesHref   = `cand-matches.html?job=${encodeURIComponent(job.job_id)}`;
-    const postJobHref   = `rec-postjob.html`;
+    const matchesHref = `cand-matches.html?job=${encodeURIComponent(job.job_id)}`;
+    const postJobHref = `rec-postjob.html`;
+    const isInternal  = job._source === "internal";
+
+    // Source badge — shown in top-right next to the location pill
+    const sourceBadge = isInternal
+      ? `<span style="
+            font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+            padding:3px 8px;border-radius:10px;white-space:nowrap;
+            background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.28);color:#4ade80;">
+           ✦ Internal
+         </span>`
+      : `<span style="
+            font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+            padding:3px 8px;border-radius:10px;white-space:nowrap;
+            background:rgba(122,162,255,.10);border:1px solid rgba(122,162,255,.22);color:#7aa2ff;">
+           ⬡ External
+         </span>`;
+
+    // Internal cards get a subtle green left-border accent
+    const cardAccent = isInternal
+      ? "border-left:3px solid rgba(74,222,128,.35);"
+      : "";
 
     return `
-    <div class="job-modern-card">
+    <div class="job-modern-card" style="${cardAccent}">
       <div class="job-modern-header">
         <h3>${job.title}</h3>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        ${sourceBadge}
         <span class="job-pill">${formatLocationPill(getJobLocation(job))}</span>
       </div>
       <div class="job-modern-company">${job.company || "-"}</div>
@@ -754,6 +813,7 @@ function getRegionLabel(loc) {
 }
 
 let activeLocationTab = ""; // "" = All
+let activeSourceFilter  = ""; // "" = All, "internal", "external"
 
 function populateLocationFilter() {
   const select  = document.getElementById("locationFilter");
@@ -875,12 +935,43 @@ async function initRecruiterJobsPage() {
     await loadRecruiterJobs();
   });
 
+  // Helper: refresh the source-tab count badges
+  function refreshSourceCounts() {
+    const base = [...orgJobs];
+    const intCount = base.filter(j => j._source === "internal").length;
+    const extCount = base.filter(j => j._source === "external").length;
+    const el = id => document.getElementById(id);
+    if (el("srcAllCount")) el("srcAllCount").textContent = base.length;
+    if (el("srcIntCount")) el("srcIntCount").textContent = intCount;
+    if (el("srcExtCount")) el("srcExtCount").textContent = extCount;
+  }
+
+  // Wire source filter buttons
+  ["srcAllBtn","srcIntBtn","srcExtBtn"].forEach(btnId => {
+    document.getElementById(btnId)?.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      activeSourceFilter = btn.dataset.src || "";
+      activeLocationTab  = "";
+      // Toggle active class
+      document.querySelectorAll(".src-tab").forEach(b => {
+        b.classList.remove("active-all","active-int","active-ext");
+      });
+      const cls = activeSourceFilter === "internal" ? "active-int"
+                : activeSourceFilter === "external" ? "active-ext"
+                : "active-all";
+      btn.classList.add(cls);
+      populateLocationFilter();
+      renderRecruiterJobs();
+    });
+  });
+
   document.getElementById("myOrgBtn")?.addEventListener("click", () => {
     showAll = false;
     activeLocationTab = "";
     document.getElementById("myOrgBtn").classList.add("active");
     document.getElementById("allJobsBtn").classList.remove("active");
     populateLocationFilter();
+    refreshSourceCounts();
     renderRecruiterJobs();
   });
 
