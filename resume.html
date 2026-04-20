@@ -809,7 +809,7 @@ Analyze this resume and return ONLY a valid JSON object. No markdown, no backtic
 Resume:
 ${text.slice(0, 4000)}`;
 
-    const raw    = await callGemini(prompt);
+    const raw    = await callGemini(prompt, "resume_analysis");
     if (!raw) throw new Error("Empty LLM response");
     const result = JSON.parse(raw.replace(/```json|```/g, "").trim());
     renderResults(result);

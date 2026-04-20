@@ -234,7 +234,7 @@ ${JSON.stringify(slim)}`;
 
   try {
     const raw = await Promise.race([
-      callGemini(prompt),
+      callGemini(prompt, "recommendations"),
       new Promise(resolve => setTimeout(() => resolve(""), 12000))
     ]);
 
@@ -325,7 +325,6 @@ async function resolveToBackendId(localId) {
     return backendId;
 
   } catch (err) {
-    console.warn(err.name === "AbortError" ? "Backend timed out" : "Backend failed:", err.message);
     return localId;
   }
 }
@@ -744,7 +743,6 @@ async function trackInteraction({ job_id, candidate_id, action }) {
       body:    JSON.stringify({ job_id, candidate_id, action })
     });
   } catch (err) {
-    console.warn("Interaction tracking failed:", err);
   }
 }
 
@@ -786,7 +784,6 @@ async function handleApplyBeyondMatch(btn, jobId, jobTitle, recruiterId, candida
     // Firestore document id.
     success = await window.applyToJob(jobId, jobTitle, recruiterId, jobFirestoreId);
   } catch (err) {
-    console.error("handleApplyBeyondMatch:", err);
     if (window.showToast) window.showToast("Application failed. Please try again.", "error");
   }
 
@@ -850,11 +847,9 @@ window._applyClick = async function (btn) {
   const applyUrl   = btn.dataset.applyUrl || cardData.apply_url || "";
   const company    = btn.dataset.company  || cardData.company   || "";
 
-  console.log("APPLY CLICKED", jobId, "source:", source || "(none)", "recruiter:", recruiterId);
 
   // FIX: Guard — if jobId is still undefined here don't proceed.
   if (!jobId) {
-    console.error("_applyClick: could not resolve jobId from button", btn);
     if (typeof window.showToast === "function") {
       window.showToast("Could not identify the job. Please refresh and try again.", "error");
     }
@@ -883,7 +878,6 @@ window._applyClick = async function (btn) {
   }
 
   if (typeof window.applyToJob !== "function") {
-    console.error("applyToJob not loaded");
     return;
   }
 
@@ -929,7 +923,6 @@ async function handleSaveJob(btn, job, candidateId) {
       </svg>
       Saved`;
   } catch (e) {
-    console.error("Save failed:", e);
   }
 }
 
@@ -1059,7 +1052,7 @@ Return ONLY a raw JSON object, no markdown, no backticks:
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const raw = await callGemini(prompt);
+        const raw = await callGemini(prompt, "know_more");
         if (!raw?.trim()) throw new Error("Empty LLM response");
         const clean   = raw.replace(/```json|```/g, "").trim();
         const jsonStr = clean.match(/\{[\s\S]*\}/)?.[0] || clean;

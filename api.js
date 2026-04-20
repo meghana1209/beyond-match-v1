@@ -321,7 +321,7 @@ Candidates: ${JSON.stringify(slim)}`;
 
   try {
     const raw = await Promise.race([
-      callGemini(prompt),
+      callGemini(prompt, "rec_summaries"),
       new Promise(resolve => setTimeout(() => resolve(""), 7000))
     ]);
 
@@ -1329,7 +1329,7 @@ Write a warm, professional email (3–4 short paragraphs) appropriate for the st
 Return ONLY the email body text, no subject line, no JSON.`;
 
     try {
-      const draft = await callGemini(prompt);
+      const draft = await callGemini(prompt, "draft_email");
       emailDraftCache[cacheKey] = draft;
       output.value      = draft;
       box.style.display = "block";
@@ -1453,7 +1453,7 @@ Return ONLY a raw JSON object, no markdown, no backticks:
 
   try {
     const { callGemini } = await import("./gemini.js");
-    const raw    = await callGemini(prompt);
+    const raw    = await callGemini(prompt, "candidate_analysis");
     const clean  = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
     _recAnalysisCache[cacheKey] = parsed;

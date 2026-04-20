@@ -634,13 +634,66 @@ async function parsePDF(file) {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc=
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
-  const buf=await file.arrayBuffer();
-  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
-  let t=""; for(let i=1;i<=pdf.numPages;i++){
-    const pg=await pdf.getPage(i); const c=await pg.getTextContent();
-    t+=c.items.map(x=>x.str).join(" ")+"\n";
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({data: buf}).promise;
+  let pages = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const pg = await pdf.getPage(i);
+    const content = await pg.getTextContent();
+    const viewport = pg.getViewport({scale: 1});
+
+    // Each item has a transform matrix: [scaleX, skewX, skewY, scaleY, x, y]
+    // item.transform[5] is the Y position (in PDF units, origin at bottom-left).
+    // We use it to detect line breaks: if Y changes by more than ~2 units, it's
+    // a new line. Items on the same line (same Y) are joined with a space.
+
+    const LINE_GAP_THRESHOLD = 2; // pt — smaller than this = same line
+    let lines = [];
+    let currentLine = [];
+    let lastY = null;
+
+    for (const item of content.items) {
+      // hasEOL is set by pdf.js when the item ends a line (e.g. in tagged PDFs)
+      const y = item.transform ? item.transform[5] : null;
+      const str = item.str || "";
+
+      if (lastY === null) {
+        // first item
+        currentLine.push(str);
+      } else if (Math.abs(y - lastY) > LINE_GAP_THRESHOLD) {
+        // Y changed — new line
+        const joined = currentLine.join(" ").trim();
+        if (joined) lines.push(joined);
+        currentLine = [str];
+      } else {
+        // Same line — just append
+        // If the item starts with no space and previous ended with no space,
+        // pdf.js sometimes splits a word; preserve that by checking item.hasEOL
+        currentLine.push(str);
+      }
+
+      if (item.hasEOL) {
+        const joined = currentLine.join(" ").trim();
+        if (joined) lines.push(joined);
+        currentLine = [];
+        lastY = null;
+        continue;
+      }
+
+      lastY = y;
+    }
+
+    // flush last line
+    if (currentLine.length) {
+      const joined = currentLine.join(" ").trim();
+      if (joined) lines.push(joined);
+    }
+
+    pages.push(lines.join("\n"));
   }
-  return t;
+
+  return pages.join("\n\n");
 }
 async function parseDOCX(file){
   if(!window.mammoth) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
@@ -664,7 +717,7 @@ async function aiParse(){
   hideErr(); bar(20);
   try{
     const {callGemini}=await import("./gemini.js");
-    const raw=await callGemini(`You are a job description parser. Extract structured data from the JD text below.
+    let raw=await callGemini(`You are a job description parser. Extract structured data from the JD text below.
 
 IMPORTANT RULES:
 - salary_min and salary_max must be plain integers with NO commas, symbols, or letters (e.g. 400000 not ₹4,00,000)
@@ -686,9 +739,93 @@ Return ONLY a raw JSON object, no markdown, no backticks, no explanation:
 {"title":"","location":"","remote":"onsite","employment_type":"Full-time","salary_min":0,"salary_max":0,"experience":"","level":"","skills":[],"description":"","industry":"","function":"","deadline":"","openings":1,"apply_url":""}
 
 JD:
-${txt.slice(0,4000)}`);
+${txt.slice(0,3000)}`, "jd_parse");
 
-    const d=JSON.parse(raw.replace(/```json[\s\S]*?```|```/g,"").trim());
+    // ── guard: LLM endpoint returned nothing (e.g. 503 / network error) ──
+    if (!raw || !raw.trim()) {
+      throw new Error("The AI service is temporarily unavailable (503). Please try again in a moment.");
+    }
+
+    // ── robust JSON extraction ──────────────────────────────────────────
+    // Gemini sometimes truncates its output when the JD is long, leaving
+    // broken JSON that crashes JSON.parse with "Unexpected end of JSON input".
+    // Strategy:
+    //   1. Strip any markdown fences.
+    //   2. Find the first '{' — ignore any preamble text.
+    //   3. If the string doesn't end with '}', the response was cut off:
+    //      find the last complete key-value pair and close the object.
+    //   4. Parse. If still broken, fall back to regex field extraction so
+    //      at least title / location / skills are filled in.
+    let clean = raw.replace(/```json[\s\S]*?```|```/g, "").trim();
+
+    // Locate the JSON object start (ignore any preamble text Gemini added)
+    const objStart = clean.indexOf("{");
+    if (objStart > 0) clean = clean.slice(objStart);
+
+    // If truncated, attempt to repair by closing at the last complete value.
+    // A complete value ends with: `"` (string), digit, `]`, `}`, `true`, `false`, `null`
+    if (!clean.trimEnd().endsWith("}")) {
+      // Find last position of a safely-terminated value
+      const lastSafe = Math.max(
+        clean.lastIndexOf('"'),   // end of a string value
+        clean.lastIndexOf("]"),   // end of an array
+        clean.lastIndexOf("true"),
+        clean.lastIndexOf("false"),
+        clean.lastIndexOf("null"),
+        // last digit run (for numbers)
+        (() => { const m = clean.match(/\d(?=[^\d]*$)/); return m ? m.index : -1; })()
+      );
+      if (lastSafe > 0) {
+        // Truncate to that point, then strip any dangling comma or partial key
+        clean = clean.slice(0, lastSafe + 1).replace(/,\s*$/, "").replace(/,\s*"[^"]*$/, "");
+        // Close any open arrays
+        const opens  = (clean.match(/\[/g) || []).length;
+        const closes = (clean.match(/\]/g) || []).length;
+        if (opens > closes) clean += "]";
+        clean += "}";
+      }
+    }
+
+    let d;
+    try {
+      d = JSON.parse(clean);
+    } catch (jsonErr) {
+      // Last resort: extract the most important fields with regex so the
+      // user at least gets title, location, skills from a broken response.
+      console.warn("aiParse: JSON.parse failed even after repair, using regex fallback.", jsonErr);
+      const grab = (key, fallback = "") => {
+        const m = raw.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"` ));
+        return m ? m[1] : fallback;
+      };
+      const grabNum = (key) => {
+        const m = raw.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`));
+        return m ? parseInt(m[1]) : 0;
+      };
+      const grabArr = (key) => {
+        const m = raw.match(new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)`));
+        if (!m) return [];
+        return m[1].match(/"([^"]+)"/g)?.map(s => s.replace(/"/g,"")) || [];
+      };
+      d = {
+        title:           grab("title"),
+        location:        grab("location"),
+        remote:          grab("remote", "onsite"),
+        employment_type: grab("employment_type", "Full-time"),
+        salary_min:      grabNum("salary_min"),
+        salary_max:      grabNum("salary_max"),
+        experience:      grab("experience"),
+        level:           grab("level"),
+        skills:          grabArr("skills"),
+        description:     grab("description"),
+        industry:        grab("industry"),
+        function:        grab("function"),
+        deadline:        grab("deadline"),
+        openings:        grabNum("openings") || 1,
+        apply_url:       grab("apply_url"),
+      };
+      // Warn the user that parsing was partial
+      if(window.showToast) showToast("AI response was truncated — some fields may be missing. Review before posting.", "warning", "Partial Auto-fill");
+    }
 
     // ── title ──
     if(d.title){$("f_title").value=d.title;cc($("f_title"),"tc");}
@@ -783,6 +920,23 @@ function resetForm(){
 /* ── submit ── */
 async function submitJob(){
   hideErr();$("okBanner").style.display="none";
+
+  // If the user is in Upload JD mode and hasn't auto-filled yet, the manual
+  // form fields will be empty — show a clear, actionable message instead of
+  // the confusing "Job title is required." validation error.
+  const inUploadMode = $("tUp").classList.contains("on");
+  const hasExtractedText = $("jdText") && $("jdText").value.trim().length > 0;
+  const formIsEmpty = !$("f_title").value.trim() && !$("f_desc").value.trim();
+  if (inUploadMode && formIsEmpty) {
+    if (hasExtractedText) {
+      showErr('Click “Auto-fill form with AI” first, then review and post.');
+    } else {
+      showErr("Please upload a JD file first, then use Auto-fill before posting.");
+    }
+    $("errBanner").scrollIntoView({behavior:"smooth", block:"nearest"});
+    return;
+  }
+
   const title=$("f_title").value.trim();
   const loc  =$("f_loc").value.trim();
   const desc =$("f_desc").value.trim();

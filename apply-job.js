@@ -55,7 +55,6 @@ function safeToast(msg, type, title) {
   if (typeof window.showToast === "function") {
     window.showToast(msg, type, title);
   } else {
-    console.warn("[applyToJob toast]", type?.toUpperCase(), title || "", msg);
   }
 }
 
@@ -98,7 +97,6 @@ window.applyToJob = async function (jobId, jobTitle, recruiterId, jobFirestoreId
   // FIX: Prevent simultaneous duplicate submissions (rapid double-click or
   // multiple Apply buttons clicked before the first resolves).
   if (_isSubmitting) {
-    console.warn("applyToJob: submission already in progress, ignoring duplicate call.");
     return false;
   }
   _isSubmitting = true;
@@ -117,7 +115,6 @@ async function _doApply(jobId, jobTitle, recruiterId, jobFirestoreId, candidateN
   // from the button's data attributes (e.g. wrong dataset key, wrong button
   // variant rendered). Fail fast here with a clear message instead.
   if (!jobId) {
-    console.error("applyToJob called with missing jobId. Check data-apply-job attribute on the Apply button.");
     safeToast("Could not identify the job. Please refresh and try again.", "error");
     return false;
   }
@@ -189,7 +186,6 @@ async function _doApply(jobId, jobTitle, recruiterId, jobFirestoreId, candidateN
       return false;
     }
   } catch (err) {
-    console.error("applyToJob duplicate check failed:", err);
     safeToast("Could not verify application status. Please try again.", "error");
     return false;
   }
@@ -218,7 +214,6 @@ async function _doApply(jobId, jobTitle, recruiterId, jobFirestoreId, candidateN
     });
   } catch (err) {
     safeToast("Application failed. Please try again.", "error");
-    console.error("applyToJob error:", err);
     return false;
   }
 

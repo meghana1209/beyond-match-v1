@@ -106,7 +106,6 @@ async function loadMatchedCandidateIds() {
         const hasCompany = vals.some(v => v.company && v.company !== "");
         if (vals.length === 0 || (hasRealData && hasCompany)) return; // cache is good
         // else fall through to re-fetch
-        console.log("[LocateHire] Cache invalid (missing pct or company) — busting and re-fetching");
         sessionStorage.removeItem("bm_rec_matched_cand_ids");
         sessionStorage.removeItem("bm_rec_candidate_match_map");
         _candidateMatchMap = {};
@@ -164,8 +163,6 @@ async function loadMatchedCandidateIds() {
         try {
           const res = await window.apiFetch(`/matches?job_id=${j.job_id}&top_n=50&offset=0`);
           const matches = res?.matches || (Array.isArray(res) ? res : []);
-          // Debug: log first match object to confirm field names
-          if (matches[0]) console.log(`[LocateHire] /matches sample for job ${j.job_id}:`, JSON.stringify(matches[0]));
           // match_percent may also come as score (0–1) or match_score — normalise all
           return matches.map(m => {
             let pct = m.match_percent ?? m.match_score ?? null;
@@ -212,7 +209,6 @@ async function loadMatchedCandidateIds() {
     } catch { }
 
   } catch (e) {
-    console.warn("RecLocateHire: could not load matched candidate IDs", e);
   }
 }
 
@@ -477,18 +473,12 @@ async function loadCandidatesAndMarkers() {
         })
         .filter(c => c.is_latest !== false);
 
-      // Debug: log first candidate to confirm field names
-      if (candidates[0]) console.log("[LocateHire] Firestore candidate sample:", JSON.stringify(candidates[0]));
-
-      console.log("🔥 Candidates loaded:", candidates.length);
     }
   } catch (err) {
-    console.error("❌ Firestore fetch failed:", err);
   }
 
   // ❌ No data
   if (!candidates.length) {
-    console.warn("No candidates found");
     return;
   }
 
@@ -544,7 +534,6 @@ async function loadCandidatesAndMarkers() {
     locationMap[key].candidates.push(cand);
   }
 
-  console.log("📍 Locations:", Object.keys(locationMap).length);
 
   // ✅ 5. Geocoding setup
   const geoCache = loadGeoCache();
@@ -916,7 +905,6 @@ window.openCandidateProfileModal = async function(candidateId, nameHint, jobTitl
     const snap = await getDoc(doc(window.db, "candidates", String(candidateId)));
     if (snap.exists()) cand = snap.data();
   } catch (e) {
-    console.warn("[CandProfileModal] Firestore fetch failed:", e);
   }
 
   const name       = cand.name         || nameHint    || "Candidate";
